@@ -1,6 +1,35 @@
 import { MilestoneList } from './MilestoneList';
 
-export function TransactionView({ transaction, milestones, isBuyer, isSeller }) {
+interface User {
+    id: number;
+    username: string;
+}
+
+interface Transaction {
+    id: string;
+    title: string;
+    status: string;
+    total_value: number;
+    buyer: User;
+    seller: User;
+}
+
+interface Milestone {
+    id: number;
+    title: string;
+    value: number;
+    status: string;
+    transaction_id: string;
+}
+
+interface TransactionViewProps {
+    transaction: Transaction;
+    milestones: Milestone[];
+    isBuyer: boolean;
+    isSeller: boolean;
+}
+
+export function TransactionView({ transaction, milestones, isBuyer, isSeller }: TransactionViewProps) {
     return (
         <div>
             <h2>{transaction.title}</h2>

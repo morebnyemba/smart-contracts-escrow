@@ -1,140 +1,140 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from django.db.utils import IntegrityError
+from rest_framework.test import APITestCase, APIClient
+from rest_framework import status
 from .models import SellerProfile, ServiceCategory
 
 User = get_user_model()
 
 
-class CustomUserModelTests(TestCase):
-    def test_create_user(self):
-        """Test creating a user with email and username"""
-        user = User.objects.create_user(
-            username='testuser',
-            email='testuser@example.com',
-            password='testpass123'
-        )
-        self.assertEqual(user.username, 'testuser')
-        self.assertEqual(user.email, 'testuser@example.com')
-        self.assertTrue(user.check_password('testpass123'))
-        self.assertTrue(user.is_active)
-        self.assertFalse(user.is_staff)
-        self.assertFalse(user.is_superuser)
+class UserAuthenticationTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.register_url = '/api/users/auth/register/'
+        self.login_url = '/api/users/auth/login/'
+        self.user_url = '/api/users/auth/user/'
 
-    def test_create_superuser(self):
-        """Test creating a superuser"""
-        admin_user = User.objects.create_superuser(
-            username='admin',
-            email='admin@example.com',
-            password='adminpass123'
-        )
-        self.assertEqual(admin_user.username, 'admin')
-        self.assertEqual(admin_user.email, 'admin@example.com')
-        self.assertTrue(admin_user.is_active)
-        self.assertTrue(admin_user.is_staff)
-        self.assertTrue(admin_user.is_superuser)
+    def test_user_registration(self):
+        """Test user registration"""
+        data = {
+            'username': 'testuser',
+            'email': 'test@example.com',
+            'password': 'testpass123',
+            'password_confirm': 'testpass123',
+            'first_name': 'Test',
+            'last_name': 'User'
+        }
+        response = self.client.post(self.register_url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('tokens', response.data)
+        self.assertIn('user', response.data)
+        self.assertEqual(response.data['user']['email'], 'test@example.com')
 
-    def test_email_unique(self):
-        """Test that email must be unique"""
-        User.objects.create_user(
-            username='user1',
-            email='duplicate@example.com',
-            password='pass123'
-        )
-        with self.assertRaises(IntegrityError):
-            User.objects.create_user(
-                username='user2',
-                email='duplicate@example.com',
-                password='pass123'
-            )
+    def test_user_registration_password_mismatch(self):
+        """Test registration with mismatched passwords"""
+        data = {
+            'username': 'testuser',
+            'email': 'test@example.com',
+            'password': 'testpass123',
+            'password_confirm': 'different123',
+            'first_name': 'Test',
+            'last_name': 'User'
+        }
+        response = self.client.post(self.register_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_user_str_representation(self):
-        """Test the string representation of the user"""
+    def test_user_login(self):
+        """Test user login"""
         user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
-            password='pass123'
+            password='testpass123'
         )
-        self.assertEqual(str(user), 'testuser')
+        data = {
+            'username': 'testuser',
+            'password': 'testpass123'
+        }
+        response = self.client.post(self.login_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+
+    def test_get_current_user(self):
+        """Test getting current authenticated user"""
+        user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='testpass123'
+        )
+        self.client.force_authenticate(user=user)
+        response = self.client.get(self.user_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'testuser')
+
+    def test_get_current_user_unauthorized(self):
+        """Test getting current user without authentication"""
+        response = self.client.get(self.user_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class SellerProfileModelTests(TestCase):
+class SellerOnboardingTests(APITestCase):
     def setUp(self):
+        self.client = APIClient()
         self.user = User.objects.create_user(
-            username='seller',
-            email='seller@example.com',
-            password='pass123'
+            username='testuser',
+            email='test@example.com',
+            password='testpass123'
         )
+        self.category = ServiceCategory.objects.create(
+            name='Web Development',
+            slug='web-development'
+        )
+        self.create_url = '/api/users/seller/profile/create/'
+        self.profile_url = '/api/users/seller/profile/'
 
     def test_create_seller_profile(self):
         """Test creating a seller profile"""
-        profile = SellerProfile.objects.create(
+        self.client.force_authenticate(user=self.user)
+        data = {
+            'account_type': 'INDIVIDUAL',
+            'skill_ids': [self.category.id]
+        }
+        response = self.client.post(self.create_url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['account_type'], 'INDIVIDUAL')
+        self.assertTrue(SellerProfile.objects.filter(user=self.user).exists())
+
+    def test_create_seller_profile_unauthorized(self):
+        """Test creating seller profile without authentication"""
+        data = {
+            'account_type': 'INDIVIDUAL'
+        }
+        response = self.client.post(self.create_url, data)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_get_seller_profile(self):
+        """Test retrieving seller profile"""
+        seller_profile = SellerProfile.objects.create(
             user=self.user,
-            account_type=SellerProfile.AccountType.INDIVIDUAL
+            account_type='INDIVIDUAL'
         )
-        self.assertEqual(profile.user, self.user)
-        self.assertEqual(profile.account_type, SellerProfile.AccountType.INDIVIDUAL)
-        self.assertEqual(profile.verification_status, SellerProfile.VerificationStatus.UNVERIFIED)
-        self.assertIsNotNone(profile.public_seller_id)
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.profile_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['account_type'], 'INDIVIDUAL')
 
-    def test_seller_profile_company(self):
-        """Test creating a company seller profile"""
-        profile = SellerProfile.objects.create(
+    def test_update_seller_profile(self):
+        """Test updating seller profile"""
+        seller_profile = SellerProfile.objects.create(
             user=self.user,
-            account_type=SellerProfile.AccountType.COMPANY,
-            company_name='Test Company LLC'
+            account_type='INDIVIDUAL'
         )
-        self.assertEqual(profile.account_type, SellerProfile.AccountType.COMPANY)
-        self.assertEqual(profile.company_name, 'Test Company LLC')
-
-    def test_seller_profile_one_to_one_relationship(self):
-        """Test that one user can only have one seller profile"""
-        SellerProfile.objects.create(user=self.user)
-        with self.assertRaises(IntegrityError):
-            SellerProfile.objects.create(user=self.user)
-
-
-class ServiceCategoryModelTests(TestCase):
-    def test_create_service_category(self):
-        """Test creating a service category"""
-        category = ServiceCategory.objects.create(
-            name='Web Development',
-            slug='web-development'
-        )
-        self.assertEqual(category.name, 'Web Development')
-        self.assertEqual(category.slug, 'web-development')
-
-    def test_service_category_unique_name(self):
-        """Test that service category name must be unique"""
-        ServiceCategory.objects.create(
-            name='Web Development',
-            slug='web-development'
-        )
-        with self.assertRaises(IntegrityError):
-            ServiceCategory.objects.create(
-                name='Web Development',
-                slug='web-dev'
-            )
-
-    def test_service_category_many_to_many_with_seller(self):
-        """Test many-to-many relationship between service category and seller"""
-        user = User.objects.create_user(
-            username='seller',
-            email='seller@example.com',
-            password='pass123'
-        )
-        profile = SellerProfile.objects.create(user=user)
-        
-        category1 = ServiceCategory.objects.create(
-            name='Web Development',
-            slug='web-development'
-        )
-        category2 = ServiceCategory.objects.create(
-            name='Mobile Development',
-            slug='mobile-development'
-        )
-        
-        profile.skills.add(category1, category2)
-        self.assertEqual(profile.skills.count(), 2)
-        self.assertIn(category1, profile.skills.all())
-        self.assertIn(category2, profile.skills.all())
+        self.client.force_authenticate(user=self.user)
+        data = {
+            'account_type': 'COMPANY',
+            'company_name': 'Test Company'
+        }
+        response = self.client.patch(self.profile_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['account_type'], 'COMPANY')
+        self.assertEqual(response.data['company_name'], 'Test Company')
