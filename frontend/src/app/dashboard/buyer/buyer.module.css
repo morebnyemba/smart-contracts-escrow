@@ -1,0 +1,389 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+}
+
+.subtitle {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 4rem;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+/* Stats Cards */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.statCard {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 1.5rem;
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.statCard:nth-child(2) {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.statCard:nth-child(3) {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.statCard:nth-child(4) {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.statValue {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.statLabel {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.filterButton,
+.filterActive {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #ddd;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.filterButton:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.filterActive {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+@media (prefers-color-scheme: dark) {
+  .filterButton {
+    background: #1a1a1a;
+    border-color: #333;
+    color: white;
+  }
+
+  .filterButton:hover {
+    border-color: #667eea;
+  }
+}
+
+/* Transaction List */
+.transactionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.transactionCard {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.transactionCard:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .transactionCard {
+    background: #1a1a1a;
+    border-color: #333;
+  }
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cardTitle h3 {
+  font-size: 1.3rem;
+  margin: 0;
+  color: var(--foreground);
+}
+
+.cardValue {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #667eea;
+}
+
+.statusBadge {
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.statusAwaitingReview {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.statusInProgress {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.statusCompleted {
+  background: #d4edda;
+  color: #155724;
+}
+
+.statusInEscrow {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.statusDefault {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+@media (prefers-color-scheme: dark) {
+  .statusAwaitingReview {
+    background: #664d03;
+    color: #ffecb5;
+  }
+
+  .statusInProgress {
+    background: #055160;
+    color: #cff4fc;
+  }
+
+  .statusCompleted {
+    background: #0f5132;
+    color: #d1e7dd;
+  }
+
+  .statusInEscrow {
+    background: #41464b;
+    color: #e2e3e5;
+  }
+}
+
+.cardBody {
+  margin-bottom: 1rem;
+}
+
+.cardInfo {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.infoLabel {
+  font-weight: 500;
+  color: #666;
+}
+
+.infoValue {
+  color: var(--foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  .infoLabel {
+    color: #999;
+  }
+}
+
+.progressBar {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .progressBar {
+    background: #333;
+  }
+}
+
+.cardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cardFooter {
+    border-top-color: #333;
+  }
+}
+
+.dateInfo {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.viewButton,
+.approveButton {
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  border: none;
+}
+
+.viewButton {
+  background: #667eea;
+  color: white;
+  display: inline-block;
+}
+
+.viewButton:hover {
+  background: #5568d3;
+  transform: translateY(-1px);
+}
+
+.approveButton {
+  background: #43e97b;
+  color: white;
+}
+
+.approveButton:hover {
+  background: #38d169;
+  transform: translateY(-1px);
+}
+
+/* Empty State */
+.emptyState {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.emptyState p {
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.findSellerButton {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.findSellerButton:hover {
+  background: #5568d3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .header h1 {
+    font-size: 2rem;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filters {
+    flex-wrap: wrap;
+  }
+
+  .cardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cardFooter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .viewButton,
+  .approveButton {
+    flex: 1;
+    text-align: center;
+  }
+}
