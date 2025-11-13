@@ -14,3 +14,5 @@ The platform combines a simple, 8-step user flow with the ability to manage comp
 ## Getting Started
 
 Further instructions will be added here for setting up the development environment, running the applications, and deploying.
+
+*This is a test commit to enable pull request creation.*
