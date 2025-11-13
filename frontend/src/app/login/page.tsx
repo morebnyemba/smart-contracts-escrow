@@ -41,7 +41,7 @@ export default function LoginPage() {
       // const data = await response.json();
       
       // Placeholder for now - simulate successful login
-      console.log('Login attempt with:', { email, password });
+      console.log('Login attempt with:', { email });
       
       // Mock login for development
       const mockToken = 'mock-jwt-token';
