@@ -1,9 +1,11 @@
+'use client';
+
 import { TransactionView } from '@/components/transactions/TransactionView';
 import { useTransactionStore } from '@/store/transactionStore';
 import { useUserStore } from '@/store/userStore';
 import { useEffect } from 'react';
 
-export default function TransactionPage({ params }) {
+export default function TransactionPage({ params }: { params: { tx_id: string } }) {
     const { tx_id } = params;
     const { user } = useUserStore();
     const { activeTransaction, milestones, fetchTransaction } = useTransactionStore();
