@@ -3,3 +3,10 @@ djangorestframework
 djangorestframework-simplejwt
 django-cors-headers
 Pillow
+psycopg2-binary
+markdown
+django-filter
+drf-yasg
+gunicorn
+python-decouple
+django-environ
