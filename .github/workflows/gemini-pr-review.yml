@@ -311,3 +311,6 @@ Diff:
           # Emit LLM result to workflow log
           print("::set-output name=review_result::" + json.dumps({"decision": decision, "comment": comment}))
           PY
+
+      - name: Done
+        run: echo "Gemini review job completed."
