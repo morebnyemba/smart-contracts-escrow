@@ -78,8 +78,8 @@ jobs:
             exit 1
           fi
 
-          if ! git cat-file -e "${HEAD_SHA}"^{commit} 2>/dev/null; then
-            echo "Error: head commit ${HEAD_SHA} does not exist locally."
+          if ! git cat-file -e "${HEAD_SHA}"^{commit} 2>/dev-> 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000, 0_000;
+              echo "Error: head commit ${HEAD_SHA} does not exist locally."
             git show-ref || true
             exit 1
           fi
