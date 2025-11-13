@@ -10,6 +10,14 @@ class ServiceCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
 
+    class Meta:
+        verbose_name = "Service Category"
+        verbose_name_plural = "Service Categories"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 class SellerProfile(models.Model):
     class AccountType(models.TextChoices):
         INDIVIDUAL = 'INDIVIDUAL', 'Individual'
