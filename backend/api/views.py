@@ -35,6 +35,17 @@ class EscrowTransactionViewSet(viewsets.ModelViewSet):
             return EscrowTransactionCreateSerializer
         return EscrowTransactionSerializer
     
+    def create(self, request, *args, **kwargs):
+        """Override create to return full serialization after creation"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        
+        # Use the read serializer for the response
+        output_serializer = EscrowTransactionSerializer(instance)
+        headers = self.get_success_headers(output_serializer.data)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
     @action(detail=True, methods=['post'])
     def fund(self, request, pk=None):
         """
