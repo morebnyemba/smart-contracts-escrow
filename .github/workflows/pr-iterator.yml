@@ -122,27 +122,26 @@ jobs:
                   needsAttentionReasons.push(`❌ Failing checks: ${failingChecks.map(c => c.name).join(', ')}`);
                 }
                 
-                const commentBody = `## 🤖 PR Status Check
-                
-This PR requires attention:
-
-${needsAttentionReasons.map(r => `- ${r}`).join('\n')}
-
-### Current Status
-- **Age**: ${prAge} days old
-- **Last activity**: ${daysSinceActivity} days ago
-- **Approvals**: ${approvers.length} ${approvers.length > 0 ? `(${approvers.join(', ')})` : ''}
-- **Change requests**: ${changeRequesters.length} ${changeRequesters.length > 0 ? `(${changeRequesters.join(', ')})` : ''}
-- **Failing checks**: ${failingChecks.length}
-
-### Recommended Actions
-${approvers.length === 0 ? '- [ ] Request review from maintainers\n' : ''}
-${changeRequesters.length > 0 ? '- [ ] Address requested changes\n' : ''}
-${failingChecks.length > 0 ? '- [ ] Fix failing CI checks\n' : ''}
-${isStale ? '- [ ] Rebase on latest main branch\n- [ ] Confirm this PR is still relevant\n' : ''}
-
----
-*This is an automated check running every 6 hours. If this PR should be closed, please close it to prevent future notifications.*`;
+                let commentBody = '## 🤖 PR Status Check\n\n';
+                commentBody += 'This PR requires attention:\n\n';
+                commentBody += needsAttentionReasons.map(r => `- ${r}`).join('\n') + '\n\n';
+                commentBody += '### Current Status\n';
+                commentBody += `- **Age** ${prAge} days old\n`;
+                commentBody += `- **Last activity** ${daysSinceActivity} days ago\n`;
+                commentBody += `- **Approvals** ${approvers.length}`;
+                if (approvers.length > 0) commentBody += ` (${approvers.join(', ')})`;
+                commentBody += '\n';
+                commentBody += `- **Change requests** ${changeRequesters.length}`;
+                if (changeRequesters.length > 0) commentBody += ` (${changeRequesters.join(', ')})`;
+                commentBody += '\n';
+                commentBody += `- **Failing checks** ${failingChecks.length}\n\n`;
+                commentBody += '### Recommended Actions\n';
+                if (approvers.length === 0) commentBody += '- [ ] Request review from maintainers\n';
+                if (changeRequesters.length > 0) commentBody += '- [ ] Address requested changes\n';
+                if (failingChecks.length > 0) commentBody += '- [ ] Fix failing CI checks\n';
+                if (isStale) commentBody += '- [ ] Rebase on latest main branch\n- [ ] Confirm this PR is still relevant\n';
+                commentBody += '\n---\n';
+                commentBody += '*This is an automated check running every 6 hours. If this PR should be closed, please close it to prevent future notifications.*';
 
                 // Check if we've already posted a similar comment recently
                 const { data: comments } = await github.rest.issues.listComments({

@@ -89,7 +89,7 @@ jobs:
           echo "Diff size (lines): $(wc -l < pr_diff.diff || true)"
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
@@ -130,14 +130,11 @@ jobs:
             diff_text = f.read()
 
           # Build prompt instructing the LLM to return strict JSON:
-          prompt = f"""
-You are an automated code reviewer. Analyze the provided git diff and return a single-line JSON object with two fields:
-  - decision: one of "approve", "request_changes", "comment", "merge"
-  - comment: a concise human-readable review text to include in the GitHub review.The JSON must be the only content in the response and must parse as JSON.
-
-Diff:
-{diff_text}
-"""
+          prompt = "You are an automated code reviewer. Analyze the provided git diff and return a single-line JSON object with two fields:\n"
+          prompt += '  - decision: one of "approve", "request_changes", "comment", "merge"\n'
+          prompt += "  - comment: a concise human-readable review text to include in the GitHub review."
+          prompt += "The JSON must be the only content in the response and must parse as JSON.\n\n"
+          prompt += "Diff:\n" + diff_text
 
           def call_external_reviewer():
             # If a REVIEWER_URL is provided, call it as simple HTTP POST with API key header REVIEWER_KEY
@@ -309,7 +306,10 @@ Diff:
             sys.exit(1)
 
           # Emit LLM result to workflow log
-          print("::set-output name=review_result::" + json.dumps({"decision": decision, "comment": comment}))
+          github_output = os.environ.get('GITHUB_OUTPUT', '')
+          if github_output:
+            with open(github_output, 'a') as f:
+              f.write(f"review_result={json.dumps({'decision': decision, 'comment': comment})}\n")
           PY
 
       - name: Done
