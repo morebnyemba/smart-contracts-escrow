@@ -184,8 +184,13 @@ jobs:
 
       - name: Merge PR with squash
         if: fromJSON(steps.evaluate.outputs.result).criteriaMet
-        uses: peter-evans/merge@v4
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          pull-request-number: ${{ github.event.pull_request.number }}
-          merge-method: squash
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              merge_method: 'squash'
+            });
