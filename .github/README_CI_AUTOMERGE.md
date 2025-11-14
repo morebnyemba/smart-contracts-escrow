@@ -8,6 +8,9 @@ This document describes the GitHub Actions workflows and Dependabot configuratio
 - [Backend CI](#backend-ci)
 - [Frontend CI](#frontend-ci)
 - [Auto-merge Workflow](#auto-merge-workflow)
+- [PR Iterator Workflow](#pr-iterator-workflow)
+- [Auto-approve Workflow](#auto-approve-workflow)
+- [Gemini PR Review](#gemini-pr-review)
 - [Dependabot Configuration](#dependabot-configuration)
 - [Usage Guide](#usage-guide)
 
@@ -172,6 +175,123 @@ The workflow uses minimal, least-privilege permissions:
 - Merges are performed via the trusted `peter-evans/merge@v4` action
 - All operations are logged in the workflow run for audit purposes
 - The workflow performs its own evaluation and doesn't trust pre-existing labels
+
+## PR Iterator Workflow
+
+The **PR Iterator** workflow (`.github/workflows/pr-iterator.yml`) automatically monitors all open pull requests and helps ensure they receive proper attention.
+
+### When It Runs
+
+- **Scheduled**: Every 6 hours automatically
+- **Manual**: Can be triggered via workflow_dispatch in the Actions tab
+
+### What It Does
+
+For each open PR, the workflow:
+
+1. **Checks PR Status**:
+   - Skips draft PRs
+   - Calculates PR age and time since last activity
+   - Fetches reviews and check run status
+   - Identifies approvals and change requests
+
+2. **Identifies Issues**:
+   - Stale PRs (inactive for >14 days)
+   - PRs waiting for review (>7 days without approval)
+   - PRs with change requests
+   - PRs with failing CI checks
+
+3. **Takes Action**:
+   - Posts status comments on PRs needing attention (max once per 5 days)
+   - Adds/removes labels automatically:
+     - `stale` - PR inactive for >14 days
+     - `needs-review` - PR has no reviews
+     - `changes-requested` - Reviewers requested changes
+   - Provides actionable checklists for PR authors
+
+### Benefits
+
+- **Prevents PRs from being forgotten**: Automatic notifications for stale PRs
+- **Improves visibility**: Clear status labels on all PRs
+- **Helps prioritize**: Identifies PRs that need immediate attention
+- **Reduces manual overhead**: Automated status tracking and labeling
+
+### Status Indicators
+
+- 🔍 Needs initial review
+- ✅ Has approvals
+- 🔄 Changes requested
+- ❌ Failing CI checks
+- ⏰ Stale (needs attention)
+
+## Auto-approve Workflow
+
+The **Auto-approve Workflow** (`.github/workflows/auto-approve-workflows.yml`) ensures that workflow runs from forks and first-time contributors are automatically approved to run.
+
+### Purpose
+
+GitHub requires manual approval for workflow runs from:
+- First-time contributors
+- Forks of the repository
+
+This workflow automates that approval process so CI checks can run immediately on all PRs.
+
+### When It Runs
+
+- When a PR is opened
+- When a PR is reopened
+- When new commits are pushed to a PR
+
+### What It Does
+
+1. Checks for workflow runs in "waiting" status for the PR
+2. Automatically approves those workflow runs
+3. Allows CI checks to proceed without manual intervention
+
+### Benefits
+
+- **Faster feedback**: CI runs immediately without waiting for manual approval
+- **Better contributor experience**: First-time contributors see CI results right away
+- **Reduced maintainer burden**: No need to manually approve each workflow run
+
+**Note**: This uses `pull_request_target` event which runs in the context of the base repository, ensuring it has the necessary permissions to approve workflows.
+
+## Gemini PR Review
+
+The **Gemini PR Review** workflow (`.github/workflows/gemini-pr-review.yml`) provides AI-powered code review using Google's Gemini model or a custom reviewer endpoint.
+
+### Configuration
+
+Set these repository secrets to enable AI reviews:
+
+- `GEMINI_API_KEY` - Your Google Generative Language API key
+- `GEMINI_MODEL` - Model name (default: `models/text-bison-001`)
+- `REVIEWER_URL` - Alternative custom reviewer endpoint
+- `REVIEWER_KEY` - API key for custom reviewer
+
+### How It Works
+
+1. Generates a diff of the PR changes
+2. Sends the diff to Gemini or custom reviewer
+3. Receives a decision: `approve`, `request_changes`, `comment`, or `merge`
+4. Posts the review to the PR
+5. Optionally merges if decision is `merge` and `AUTO_MERGE=true`
+
+### Review Decisions
+
+- **approve**: Code looks good, approves the PR
+- **request_changes**: Issues found, requests changes with details
+- **comment**: Provides feedback without blocking
+- **merge**: Approves and attempts to merge (if AUTO_MERGE enabled)
+
+### Fallback Behavior
+
+If no API key is configured, uses a simple heuristic:
+- Approves small changes (<60 lines)
+- Requests changes if TODO/FIXME found
+- Comments on large changes (>2000 lines)
+
+**Security Note**: Uses `pull_request_target` to ensure workflow runs with proper permissions to review and merge PRs.
 
 ## Dependabot Configuration
 
