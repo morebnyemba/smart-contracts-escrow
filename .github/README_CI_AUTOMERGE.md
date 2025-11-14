@@ -11,71 +11,60 @@ This document describes the GitHub Actions workflows and Dependabot configuratio
 - [Dependabot Configuration](#dependabot-configuration)
 - [Usage Guide](#usage-guide)
 
-The backend CI workflow runs automatically on:
-- Push events that modify `backend/**` files
-- Pull requests that modify `backend/**` files
+## Workflows Overview
 
-**What it does:**
-1. Sets up Python 3.11
-2. Caches pip dependencies for faster builds (using hash of `backend/requirements.txt`)
-3. Installs dependencies from `backend/requirements.txt` (if present)
-4. Lints Python code with flake8 (if available)
-   - Checks for critical errors (E9, F63, F7, F82)
-   - Reports code complexity and style issues
-5. Runs tests:
-   - First attempts pytest (if available and tests exist)
-   - Falls back to Django's `manage.py test` if pytest not available
-   - Skips gracefully if no tests found
-6. Uploads logs and artifacts for debugging (excludes cache directories)
+This repository includes three main workflows:
 
-**Defensive features:**
-- Only runs steps when necessary files/directories exist
-- Gracefully handles missing dependencies or test files
-- Continues workflow even if linting finds issues (for visibility)
-- Uses `if: always()` to ensure all steps run even if previous steps fail
+1. **Backend CI** (`.github/workflows/backend-ci.yml`) - Automated testing and linting for Python/Django backend
+2. **Frontend CI** (`.github/workflows/frontend-ci.yml`) - Automated testing, linting, and building for Next.js frontend
+3. **Auto-merge on Label** (`.github/workflows/automerge-on-label.yml`) - Intelligent auto-merge based on PR evaluation
 
 ## Backend CI
 
-The frontend CI workflow runs automatically on:
-- Push events that modify `frontend/**` files
-- Pull requests that modify `frontend/**` files
+### Triggers
+- Push events affecting `backend/**` files
+- Pull request events affecting `backend/**` files
 
-**What it does:**
-1. Sets up Node.js 18.x
-2. Caches npm dependencies for faster builds (using `package-lock.json` hash)
-3. Installs dependencies:
-   - Uses `npm ci` if `package-lock.json` exists (clean install)
-   - Falls back to `npm install` otherwise
-4. Lints code with ESLint (if lint script exists in `package.json`)
-5. Type checks and builds:
-   - Checks for `tsconfig.json` (TypeScript configuration)
-   - Attempts `npm run build` first
-   - Falls back to `npm run typecheck` if build not available
-6. Runs tests (if test script exists, uses `--passWithNoTests` flag)
-7. Uploads artifacts (excludes `node_modules` and `.next`)
-
-**Defensive features:**
-- Only runs steps when configuration files exist
-- Uses `--if-present` flag to gracefully handle missing npm scripts
-- Checks for test script existence before running
-- Continues workflow even if individual steps fail
-
-## Auto-merge Workflow
-
-The auto-merge workflow (`automerge-on-label.yml`) provides intelligent, automated PR merging based on strict evaluation criteria. **This workflow performs its own review and does not rely on pre-existing labels** - it will assert the `automerge` label only when all criteria are met.
+### Steps
+1. **Checkout** - Retrieves the repository code
+2. **Setup Python 3.11** - Configures Python environment
+3. **Cache pip packages** - Speeds up dependency installation
+4. **Install dependencies** - Installs packages from `backend/requirements.txt`
+5. **Lint with flake8** - Checks code quality and style
+   - Strict checks for syntax errors and undefined names
+   - Warning checks for complexity and line length
+6. **Run tests with pytest** - Executes Django tests
+   - Supports both pytest and Django's built-in test runner
+7. **Upload test logs** - Preserves test artifacts for debugging
 
 ### Permissions
 - `contents: read` - Read repository contents
 - `pull-requests: write` - Comment on pull requests
 - `checks: read` - Read check run status
 
-The workflow automatically evaluates PRs when:
-- A label is added or removed
-- The PR is synchronized (new commits pushed)
-- The PR is opened or marked ready for review
-- The PR transitions from draft to ready
+## Frontend CI
 
-The workflow will **not** run on draft PRs.
+### Triggers
+- Push events affecting `frontend/**` files
+- Pull request events affecting `frontend/**` files
+
+### Steps
+1. **Checkout** - Retrieves the repository code
+2. **Setup Node.js 18.x** - Configures Node.js environment
+3. **Cache npm packages** - Speeds up dependency installation
+4. **Install dependencies** - Runs `npm ci` or `npm install`
+5. **Lint code** - Executes linting if script is present
+6. **Type check** - Runs TypeScript type checking
+7. **Build application** - Builds the Next.js application
+8. **Run tests** - Executes test suite if present
+9. **Upload test logs** - Preserves test artifacts and coverage reports
+
+### Permissions
+- `contents: read` - Read repository contents
+- `pull-requests: write` - Comment on pull requests
+- `checks: read` - Read check run status
+
+## Auto-merge Workflow
 
 ### Overview
 This workflow evaluates pull requests and automatically merges them when they meet specific criteria. It operates on an **opt-in** basis by asserting the `automerge` label only after its evaluation passes.
@@ -87,178 +76,136 @@ This workflow evaluates pull requests and automatically merges them when they me
 - `opened` - When a PR is opened
 - `ready_for_review` - When a draft PR is marked as ready
 
-1. ✅ **At least 1 unique approval** from a reviewer (using latest review per user)
-2. ✅ **Zero change requests** from any reviewer (using latest review per user)
-3. ✅ **Zero failing check runs** (checks must be success, neutral, or skipped)
-4. ✅ **Not in draft state**
+### Evaluation Criteria
 
 The workflow evaluates PRs based on:
 
-The workflow performs a comprehensive evaluation in these steps:
-
-1. **Evaluation** (using `actions/github-script@v7`):
-   - Fetches all PR reviews and determines latest review state per user
-   - Calculates unique approvals and change requests
-   - Fetches all check runs for the PR's head SHA
-   - Identifies failing checks (excluding success, neutral, and skipped)
-   - Fetches changed files and calculates total changed lines
-   - Determines if merge criteria are met
-
-2. **Summary Comment**: Posts a detailed evaluation comment with:
-   - Overall criteria status (PASS/FAIL)
-   - Approval count and list of approvers
-   - Change request count and list of change requesters
-   - Failing check count and list of failing checks
-   - PR details: changed files count, total changed lines
-   - Heuristic flags (large changes, many files)
-   - Status of all check runs
-   - Clear indication of next steps
-
-3. **Label Assertion**: If all criteria are met, the workflow adds the `automerge` label to the PR
-
-4. **Decision**:
-   - **If criteria PASS**: 
-     - Posts summary comment showing all criteria met ✅
-     - Adds the `automerge` label
-     - Merges the PR using squash merge method via `peter-evans/merge@v4`
-   - **If criteria FAIL**:
-     - Posts summary comment showing which criteria failed ❌
-     - Creates a review requesting changes with a checklist of items to address
-     - Does NOT add the `automerge` label
+1. **Approvals**: At least 1 unique approval required
+2. **Change Requests**: No active change requests
+3. **Failing Checks**: Zero failing or cancelled check runs
+4. **Changed Lines**: Tracked for information purposes
 
 ### Workflow Behavior
 
-**You don't need to do anything special to use auto-merge!**
+#### ✅ When Criteria Pass:
+1. Posts an evaluation comment showing the status
+2. **Adds the `automerge` label** to the PR
+3. Enables auto-merge with squash method
+4. PR merges automatically
 
-The workflow runs automatically on all non-draft PRs. Simply:
-
-1. Open a PR and ensure it's not in draft state
-2. Get at least one approval from a reviewer
-3. Ensure all CI checks pass
-4. Ensure no reviewers have requested changes
-
-The workflow will:
-- Automatically evaluate your PR on each event (new commit, label change, etc.)
-- Post a summary comment showing the evaluation results
-- If all criteria are met, add the `automerge` label and merge the PR
-- If criteria are not met, create a review with a checklist of what needs to be addressed
-
-**The workflow evaluates ALL PRs, not just those with a label.** The `automerge` label is added by the workflow itself when it determines the PR is ready to merge.
+#### ❌ When Criteria Fail:
+1. Posts an evaluation comment showing the status
+2. Creates a review with `REQUEST_CHANGES` status
+3. Provides a checklist of items to address
+4. Re-evaluates automatically when changes are made
 
 ### Merge Method
-
-PRs are merged using the **squash** method, which combines all commits into a single commit on the base branch.
-
-### Heuristic Flags
-
-The workflow includes helpful heuristic warnings in the summary comment:
-
-- ⚠️ **Large changes**: PRs with >1000 lines changed
-- ⚠️ **Many files**: PRs modifying >20 files
-
-These are informational and don't block the merge, but serve as reminders to review carefully.
+- **Squash merge** - All commits are squashed into a single commit on the base branch
 
 ### Permissions
-
-The workflow uses minimal, least-privilege permissions:
-- `contents: write` - To merge PRs
-- `pull-requests: write` - To create reviews and add labels
-- `checks: read` - To read check run status
-- `issues: write` - To post comments
-
-### Security
-
-- The workflow only uses the `GITHUB_TOKEN` (no external secrets required)
-- Merges are performed via the trusted `peter-evans/merge@v4` action
-- All operations are logged in the workflow run for audit purposes
-- The workflow performs its own evaluation and doesn't trust pre-existing labels
+- `contents: write` - Required for merging
+- `pull-requests: write` - Required for adding labels and comments
+- `checks: read` - Required for reading check status
 
 ## Dependabot Configuration
 
-Dependabot is configured in `.github/dependabot.yml` to automatically create PRs for dependency updates:
+Dependabot is configured to automatically check for dependency updates weekly.
 
-- **Frontend (npm)**: Weekly updates for dependencies in `/frontend` directory
-- **Backend (pip)**: Weekly updates for dependencies in `/backend` directory
+### Frontend (npm)
+- **Directory**: `/frontend`
+- **Schedule**: Weekly on Mondays at 09:00
+- **Open PR limit**: 5
+- **Labels**: `dependencies`, `javascript`
+- **Commit prefix**: `chore`
 
-The configuration uses:
-- `package-ecosystem: 'npm'` for frontend JavaScript/TypeScript dependencies
-- `package-ecosystem: 'pip'` for backend Python dependencies
-- `schedule: interval: 'weekly'` for regular dependency updates
+### Backend (pip)
+- **Directory**: `/backend`
+- **Schedule**: Weekly on Mondays at 09:00
+- **Open PR limit**: 5
+- **Labels**: `dependencies`, `python`
+- **Commit prefix**: `chore`
 
-Dependabot PRs can be evaluated by the auto-merge workflow like any other PR.
+### Reviewers
+All Dependabot PRs are automatically assigned to `@morebnyemba` for review.
 
-## Best Practices
+## Usage Guide
 
-1. **For Contributors**:
-   - Ensure CI checks pass before requesting review
-   - Address reviewer feedback promptly
-   - Keep PRs focused and reasonably sized
+### For Contributors
 
-2. **For Reviewers**:
-   - Review PRs promptly
-   - Use "Approve" when satisfied with changes
-   - Use "Request Changes" for blocking issues
-   - Use "Comment" for non-blocking suggestions
+#### Regular PRs
+1. Create your feature branch and make changes
+2. Push your changes and open a pull request
+3. Backend CI and/or Frontend CI will run automatically
+4. Address any linting or test failures
+5. Request reviews from maintainers
 
-3. **For Maintainers**:
-   - Monitor the auto-merge workflow logs
-   - Adjust merge criteria in the workflow file if needed
-   - Keep CI workflows updated as project structure evolves
+#### Using Auto-merge
+1. Open a pull request (ensure it's not a draft)
+2. The auto-merge workflow will evaluate your PR automatically
+3. Check the evaluation comment to see current status
+4. Obtain at least 1 approval from reviewers
+5. Ensure all checks pass
+6. The workflow will automatically add the `automerge` label and merge your PR
 
-## Troubleshooting
+**Note**: You don't need to manually add the `automerge` label - the workflow adds it automatically when criteria are met.
 
-**Q: Why wasn't my PR auto-merged even though I got approval?**
+### For Maintainers
 
-A: Check the evaluation summary comment posted by the workflow. Common reasons:
-- CI checks are still running, pending, or have failed
-- A reviewer requested changes (look for change requesters list)
-- The PR is in draft state
-- No approvals have been recorded (ensure reviewer clicked "Approve")
+#### Reviewing PRs
+- Review code changes as usual
+- Approve or request changes
+- The auto-merge workflow handles merging automatically for approved PRs
 
-**Q: Can I manually merge a PR?**
+#### Adjusting Auto-merge Criteria
+If you need to change the auto-merge criteria:
+1. Edit `.github/workflows/automerge-on-label.yml`
+2. Modify the `criteriaPass` logic in the evaluation step
+3. Common adjustments:
+   - Change minimum approvals: `approvals >= 2`
+   - Change merge method: `merge-method: merge` or `merge-method: rebase`
+   - Add additional checks based on changed files or other criteria
 
-A: Yes! The auto-merge workflow is a convenience feature. You can always merge PRs manually through the GitHub UI or using `gh` CLI.
+#### Disabling Auto-merge for Specific PRs
+- Remove the `automerge` label if accidentally added
+- The workflow will re-evaluate and not merge if criteria aren't met
+- You can also mark PRs as draft to prevent auto-merge
 
-**Q: How do I disable auto-merge for a specific PR?**
+### Troubleshooting
 
-A: The workflow evaluates all PRs automatically, but won't merge unless all criteria are met. To prevent auto-merge:
-- Convert the PR to draft, OR
-- Request changes as a reviewer, OR
-- Ensure at least one CI check fails
+#### Backend CI Fails
+- Check that `backend/requirements.txt` is up to date
+- Ensure all tests pass locally: `cd backend && pytest`
+- Review flake8 errors and fix code style issues
 
-The workflow will not add the `automerge` label unless all criteria pass.
+#### Frontend CI Fails
+- Check that `frontend/package.json` dependencies are correct
+- Ensure the build succeeds locally: `cd frontend && npm run build`
+- Review linting errors: `cd frontend && npm run lint`
 
-**Q: The workflow says I need approvals, but I see approvals on my PR. What's wrong?**
+#### Auto-merge Not Working
+- Verify the PR has at least 1 approval
+- Check that no reviewers have requested changes
+- Ensure all CI checks are passing (green)
+- Confirm the PR is not marked as draft
 
-A: The workflow uses the **latest review per user**. If a user approved and then later commented without selecting "Approve" again, their latest review might not be an approval. Ask them to submit an approval review.
+### Security Considerations
 
-**Q: CI workflow failed on a step. What should I do?**
+All workflows use least-privilege permissions:
+- Read access to repository contents
+- Write access only where needed (auto-merge for merging, PR comments)
+- Tokens are scoped appropriately using `GITHUB_TOKEN`
 
-A: Check the workflow logs in the "Actions" tab. Common issues:
+## Contributing
 
-**Backend CI:**
-- Missing dependencies (check `backend/requirements.txt`)
-- Test failures (review pytest/Django test output)
-- Linting errors from flake8 (syntax errors, undefined names)
+To improve these workflows:
+1. Test changes in a fork or feature branch
+2. Open a PR with your improvements
+3. Document any new features or changes
+4. Ensure backward compatibility where possible
 
-**Frontend CI:**
-- ESLint errors (code style/quality issues)
-- TypeScript errors (type checking failures)
-- Build failures (Next.js build issues)
-- Missing or outdated dependencies
+## Support
 
-Fix the issues locally, commit, and push. The CI will run again automatically.
-
-**Q: The auto-merge workflow keeps posting evaluation comments. Can I disable this?**
-
-A: The workflow posts a comment each time it evaluates the PR (on each trigger event). This is by design to provide visibility into the merge status. If you find this too noisy, you can modify the workflow file to comment less frequently or only when the status changes.
-
-**Q: What if I want to change the merge criteria?**
-
-A: The merge criteria are defined in the `automerge-on-label.yml` workflow file. You can modify the evaluation logic in the first step to adjust:
-- Required approval count (default: ≥1)
-- How change requests are handled
-- Which check run conclusions are considered failures
-- Additional criteria like required reviewers, PR size limits, etc.
-
-After modifying the workflow, test it on a test PR to ensure it works as expected.
+For questions or issues with CI/CD:
+- Open an issue in the repository
+- Tag `@morebnyemba` for workflow-specific questions
+- Check GitHub Actions logs for detailed error messages
