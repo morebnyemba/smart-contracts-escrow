@@ -35,12 +35,6 @@ jobs:
             for (const pr of pullRequests) {
               console.log(`\n--- Processing PR #${pr.number}: ${pr.title} ---`);
               
-              // Skip draft PRs
-              if (pr.draft) {
-                console.log(`PR #${pr.number} is a draft, skipping`);
-                continue;
-              }
-              
               // Fetch reviews for this PR
               const { data: reviews } = await github.rest.pulls.listReviews({
                 owner: context.repo.owner,
