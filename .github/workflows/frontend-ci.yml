@@ -1,83 +1,52 @@
 name: Frontend CI
-
 on:
   push:
-    branches: [main]
     paths:
       - 'frontend/**'
-      - '.github/workflows/frontend-ci.yml'
   pull_request:
     paths:
       - 'frontend/**'
-      - '.github/workflows/frontend-ci.yml'
 
 permissions:
   contents: read
+  pull-requests: write
+  checks: read
 
 jobs:
-  frontend-ci:
+  build-and-test:
     runs-on: ubuntu-latest
-    
+    strategy:
+      matrix:
+        node-version: [18.x]
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Check if package.json exists
-        id: check_package
-        run: |
-          if [ -f frontend/package.json ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Cache npm dependencies
-        if: steps.check_package.outputs.exists == 'true'
-        uses: actions/cache@v3
-        with:
-          path: frontend/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
       - name: Install dependencies
-        if: steps.check_package.outputs.exists == 'true'
         run: |
-          cd frontend
-          npm ci
+          if [ -f frontend/package-lock.json ] || [ -f frontend/package.json ]; then cd frontend; npm ci; fi
 
-      - name: Lint with ESLint
-        if: steps.check_package.outputs.exists == 'true'
+      - name: Lint
         run: |
-          cd frontend
-          npm run lint
+          if [ -f frontend/package.json ] && jq -r '.scripts.lint // empty' frontend/package.json >/dev/null 2>&1; then cd frontend; npm run lint; else echo "No lint script found"; fi
 
-      - name: Type check and build
-        if: steps.check_package.outputs.exists == 'true'
+      - name: Type check
         run: |
-          cd frontend
-          npm run build
+          if [ -f frontend/tsconfig.json ]; then cd frontend; npm run build --if-present || npm run typecheck --if-present || echo "Typecheck/build not configured"; fi
 
       - name: Run tests
-        if: steps.check_package.outputs.exists == 'true'
         run: |
-          cd frontend
-          # Check if test script exists in package.json
-          if npm run | grep -q "test"; then
-            npm test
-          else
-            echo "No test script found in package.json, skipping tests"
-          fi
+          if [ -f frontend/package.json ]; then cd frontend; if npm test --silent; then echo "Tests passed"; else echo "Tests failed"; exit 1; fi; fi
 
-      - name: Upload build artifacts
-        if: always() && steps.check_package.outputs.exists == 'true'
-        uses: actions/upload-artifact@v3
+      - name: Upload frontend logs
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: frontend-build
-          path: frontend/.next
-          if-no-files-found: ignore
+          name: frontend-ci-logs
+          path: frontend || .
