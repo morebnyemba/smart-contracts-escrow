@@ -1,42 +1,190 @@
-name: Auto-merge PRs labeled 'automerge'
+name: Auto-merge evaluation and label assertion
 
 on:
   pull_request:
     types: [labeled, unlabeled, synchronize, opened, ready_for_review]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   checks: read
   issues: write
 
 jobs:
-  try-merge:
+  evaluate-and-merge:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
     steps:
-      - name: Check trigger label
-        id: label
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const pr = context.payload.pull_request || (await github.rest.pulls.get({owner: context.repo.owner, repo: context.repo.repo, pull_number: context.payload.pull_request.number})).data
-            const hasLabel = pr.labels.some(l => l.name === 'automerge' || l.name === 'auto-merge')
-            return hasLabel
-      - name: Evaluate checks and approvals
-        if: steps.label.outputs.result == 'true'
-        uses: actions/github-script@v6
-        id: eval
+      - name: Evaluate PR for auto-merge
+        id: evaluate
+        uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
-            const { data: reviews } = await github.rest.pulls.listReviews({ owner: context.repo.owner, repo: context.repo.repo, pull_number: pr.number });
-            const approvals = new Set(reviews.filter(r => r.state === 'APPROVED').map(r => r.user.login));
-            const { data: checkRuns } = await github.rest.checks.listForRef({ owner: context.repo.owner, repo: context.repo.repo, ref: pr.head.sha });
-            const failing = checkRuns.check_runs.filter(cr => cr.conclusion && cr.conclusion !== 'success');
-            return { approvals: approvals.size, failingCount: failing.length }
-      - name: Merge when ready
-        if: steps.label.outputs.result == 'true' && (fromJSON(steps.eval.outputs.result).approvals >= 1) && (fromJSON(steps.eval.outputs.result).failingCount == 0)
+            
+            // Fetch reviews
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+            
+            // Calculate unique approvals and change requests
+            const latestReviewByUser = {};
+            for (const review of reviews) {
+              const user = review.user.login;
+              if (!latestReviewByUser[user] || new Date(review.submitted_at) > new Date(latestReviewByUser[user].submitted_at)) {
+                latestReviewByUser[user] = review;
+              }
+            }
+            
+            const approvers = [];
+            const changeRequesters = [];
+            for (const [user, review] of Object.entries(latestReviewByUser)) {
+              if (review.state === 'APPROVED') {
+                approvers.push(user);
+              } else if (review.state === 'CHANGES_REQUESTED') {
+                changeRequesters.push(user);
+              }
+            }
+            
+            // Fetch check runs
+            const { data: checkRuns } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: pr.head.sha
+            });
+            
+            const failingChecks = checkRuns.check_runs.filter(cr => 
+              cr.conclusion && cr.conclusion !== 'success' && cr.conclusion !== 'neutral' && cr.conclusion !== 'skipped'
+            );
+            
+            // Fetch changed files
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+            
+            const totalChangedLines = files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
+            
+            // Determine if criteria are met
+            const approvalCount = approvers.length;
+            const hasChangeRequests = changeRequesters.length > 0;
+            const failingCheckCount = failingChecks.length;
+            
+            const criteriaMet = approvalCount >= 1 && !hasChangeRequests && failingCheckCount === 0;
+            
+            // Build evaluation summary
+            const checkSummary = checkRuns.check_runs.map(cr => 
+              `- ${cr.name}: ${cr.conclusion || 'pending'}`
+            ).join('\n') || 'No checks found';
+            
+            const summary = `## Auto-merge Evaluation Summary
+            
+            **Criteria Status:** ${criteriaMet ? '✅ PASS' : '❌ FAIL'}
+            
+            ### Approval Status
+            - Unique Approvals: ${approvalCount} (≥1 required) ${approvalCount >= 1 ? '✅' : '❌'}
+            - Approvers: ${approvers.length > 0 ? approvers.join(', ') : 'None'}
+            
+            ### Change Requests
+            - Change Requests: ${changeRequesters.length} (0 required) ${!hasChangeRequests ? '✅' : '❌'}
+            - Change Requesters: ${changeRequesters.length > 0 ? changeRequesters.join(', ') : 'None'}
+            
+            ### Check Runs
+            - Failing Checks: ${failingCheckCount} (0 required) ${failingCheckCount === 0 ? '✅' : '❌'}
+            ${failingChecks.length > 0 ? '- Failing: ' + failingChecks.map(c => c.name).join(', ') : ''}
+            
+            ### PR Details
+            - Changed Files: ${files.length}
+            - Total Changed Lines: ${totalChangedLines}
+            - Heuristic Flags:
+              ${totalChangedLines > 1000 ? '⚠️ Large change (>1000 lines)' : ''}
+              ${files.length > 20 ? '⚠️ Many files changed (>20 files)' : ''}
+            
+            ### All Check Runs
+            ${checkSummary}
+            
+            ---
+            ${criteriaMet ? 
+              '✅ All criteria met! Adding `automerge` label and proceeding with merge.' : 
+              '❌ Criteria not met. Please address the items marked with ❌ above.'}
+            `;
+            
+            return {
+              criteriaMet,
+              approvalCount,
+              hasChangeRequests,
+              failingCheckCount,
+              summary,
+              approvers,
+              changeRequesters,
+              failingChecks: failingChecks.map(c => c.name)
+            };
+
+      - name: Post evaluation summary comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const evaluation = ${{ steps.evaluate.outputs.result }};
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: evaluation.summary
+            });
+
+      - name: Add automerge label if criteria met
+        if: fromJSON(steps.evaluate.outputs.result).criteriaMet
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['automerge']
+            });
+
+      - name: Create review requesting changes if criteria not met
+        if: fromJSON(steps.evaluate.outputs.result).criteriaMet == false
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const evaluation = ${{ steps.evaluate.outputs.result }};
+            const checklist = [];
+            
+            if (evaluation.approvalCount < 1) {
+              checklist.push('- [ ] Obtain at least 1 approval from a reviewer');
+            }
+            if (evaluation.hasChangeRequests) {
+              checklist.push('- [ ] Address change requests from: ' + evaluation.changeRequesters.join(', '));
+            }
+            if (evaluation.failingCheckCount > 0) {
+              checklist.push('- [ ] Fix failing checks: ' + evaluation.failingChecks.join(', '));
+            }
+            
+            const body = `## Auto-merge Criteria Not Met
+
+            This PR does not yet meet the criteria for auto-merge. Please address the following:
+
+            ${checklist.join('\n')}
+
+            Once all items are addressed, the workflow will automatically re-evaluate and merge if criteria are met.`;
+            
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: 'REQUEST_CHANGES',
+              body: body
+            });
+
+      - name: Merge PR with squash
+        if: fromJSON(steps.evaluate.outputs.result).criteriaMet
         uses: peter-evans/merge@v4
         with:
-          pull-request: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
