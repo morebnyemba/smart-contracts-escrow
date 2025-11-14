@@ -1,0 +1,83 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-ci:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check if package.json exists
+        id: check_package
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Cache npm dependencies
+        if: steps.check_package.outputs.exists == 'true'
+        uses: actions/cache@v3
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        if: steps.check_package.outputs.exists == 'true'
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Lint with ESLint
+        if: steps.check_package.outputs.exists == 'true'
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Type check and build
+        if: steps.check_package.outputs.exists == 'true'
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Run tests
+        if: steps.check_package.outputs.exists == 'true'
+        run: |
+          cd frontend
+          # Check if test script exists in package.json
+          if npm run | grep -q "test"; then
+            npm test
+          else
+            echo "No test script found in package.json, skipping tests"
+          fi
+
+      - name: Upload build artifacts
+        if: always() && steps.check_package.outputs.exists == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend/.next
+          if-no-files-found: ignore
