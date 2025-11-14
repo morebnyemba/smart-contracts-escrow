@@ -182,7 +182,7 @@ The **PR Iterator** workflow (`.github/workflows/pr-iterator.yml`) automatically
 
 ### When It Runs
 
-- **Scheduled**: Every 6 hours automatically
+- **Scheduled**: Every hour automatically
 - **Manual**: Can be triggered via workflow_dispatch in the Actions tab
 
 ### What It Does

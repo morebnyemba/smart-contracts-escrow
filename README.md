@@ -59,7 +59,7 @@ The **Auto-merge** workflow (`.github/workflows/automerge-on-label.yml`) provide
 The **PR Iterator** workflow (`.github/workflows/pr-iterator.yml`) automatically monitors all open PRs:
 
 **Features:**
-- Runs every 6 hours to check all open PRs
+- Runs every hour to check all open PRs
 - Identifies stale PRs (>14 days inactive) or PRs waiting for review (>7 days)
 - Automatically adds/removes labels: `stale`, `needs-review`, `changes-requested`
 - Posts status comments with actionable checklists
