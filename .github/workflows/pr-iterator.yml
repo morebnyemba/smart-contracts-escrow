@@ -2,8 +2,8 @@ name: PR Iterator - Review All Open PRs
 
 on:
   schedule:
-    # Run every 15 minutes to check all open PRs
-    - cron: '*/15 * * * *'
+    # Run every 5 minutes to check all open PRs
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     # Allow manual trigger
 
@@ -135,7 +135,7 @@ jobs:
                 if (failingChecks.length > 0) commentBody += '- [ ] Fix failing CI checks\n';
                 if (isStale) commentBody += '- [ ] Rebase on latest main branch\n- [ ] Confirm this PR is still relevant\n';
                 commentBody += '\n---\n';
-                commentBody += '*This is an automated check running every 15 minutes. If this PR should be closed, please close it to prevent future notifications.*';
+                commentBody += '*This is an automated check running every 5 minutes. If this PR should be closed, please close it to prevent future notifications.*';
 
                 // Check if we've already posted a similar comment recently
                 const { data: comments } = await github.rest.issues.listComments({
