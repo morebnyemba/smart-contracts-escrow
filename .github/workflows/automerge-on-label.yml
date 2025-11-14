@@ -1,0 +1,42 @@
+name: Auto-merge PRs labeled 'automerge'
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, synchronize, opened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+  issues: write
+
+jobs:
+  try-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check trigger label
+        id: label
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request || (await github.rest.pulls.get({owner: context.repo.owner, repo: context.repo.repo, pull_number: context.payload.pull_request.number})).data
+            const hasLabel = pr.labels.some(l => l.name === 'automerge' || l.name === 'auto-merge')
+            return hasLabel
+      - name: Evaluate checks and approvals
+        if: steps.label.outputs.result == 'true'
+        uses: actions/github-script@v6
+        id: eval
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { data: reviews } = await github.rest.pulls.listReviews({ owner: context.repo.owner, repo: context.repo.repo, pull_number: pr.number });
+            const approvals = new Set(reviews.filter(r => r.state === 'APPROVED').map(r => r.user.login));
+            const { data: checkRuns } = await github.rest.checks.listForRef({ owner: context.repo.owner, repo: context.repo.repo, ref: pr.head.sha });
+            const failing = checkRuns.check_runs.filter(cr => cr.conclusion && cr.conclusion !== 'success');
+            return { approvals: approvals.size, failingCount: failing.length }
+      - name: Merge when ready
+        if: steps.label.outputs.result == 'true' && (fromJSON(steps.eval.outputs.result).approvals >= 1) && (fromJSON(steps.eval.outputs.result).failingCount == 0)
+        uses: peter-evans/merge@v4
+        with:
+          pull-request: ${{ github.event.pull_request.number }}
+          merge-method: squash
