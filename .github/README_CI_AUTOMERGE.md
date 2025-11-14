@@ -1,10 +1,15 @@
-# CI/CD and Auto-merge Workflows
+# CI/CD and Auto-merge Documentation
 
-This document describes the Continuous Integration (CI) workflows and the auto-merge feature available for this repository.
+This document describes the GitHub Actions workflows and Dependabot configuration for the smart-contracts-escrow repository.
 
-## CI Workflows
+## 📋 Table of Contents
 
-### Backend CI (`backend-ci.yml`)
+- [Workflows Overview](#workflows-overview)
+- [Backend CI](#backend-ci)
+- [Frontend CI](#frontend-ci)
+- [Auto-merge Workflow](#auto-merge-workflow)
+- [Dependabot Configuration](#dependabot-configuration)
+- [Usage Guide](#usage-guide)
 
 The backend CI workflow runs automatically on:
 - Push events that modify `backend/**` files
@@ -29,7 +34,7 @@ The backend CI workflow runs automatically on:
 - Continues workflow even if linting finds issues (for visibility)
 - Uses `if: always()` to ensure all steps run even if previous steps fail
 
-### Frontend CI (`frontend-ci.yml`)
+## Backend CI
 
 The frontend CI workflow runs automatically on:
 - Push events that modify `frontend/**` files
@@ -59,7 +64,10 @@ The frontend CI workflow runs automatically on:
 
 The auto-merge workflow (`automerge-on-label.yml`) provides intelligent, automated PR merging based on strict evaluation criteria. **This workflow performs its own review and does not rely on pre-existing labels** - it will assert the `automerge` label only when all criteria are met.
 
-### How It Works
+### Permissions
+- `contents: read` - Read repository contents
+- `pull-requests: write` - Comment on pull requests
+- `checks: read` - Read check run status
 
 The workflow automatically evaluates PRs when:
 - A label is added or removed
@@ -69,16 +77,22 @@ The workflow automatically evaluates PRs when:
 
 The workflow will **not** run on draft PRs.
 
-### Merge Criteria
+### Overview
+This workflow evaluates pull requests and automatically merges them when they meet specific criteria. It operates on an **opt-in** basis by asserting the `automerge` label only after its evaluation passes.
 
-For a PR to be automatically merged, it must meet ALL of the following criteria:
+### Triggers
+- `labeled` - When a label is added
+- `unlabeled` - When a label is removed
+- `synchronize` - When new commits are pushed
+- `opened` - When a PR is opened
+- `ready_for_review` - When a draft PR is marked as ready
 
 1. ✅ **At least 1 unique approval** from a reviewer (using latest review per user)
 2. ✅ **Zero change requests** from any reviewer (using latest review per user)
 3. ✅ **Zero failing check runs** (checks must be success, neutral, or skipped)
 4. ✅ **Not in draft state**
 
-### What the Workflow Does
+The workflow evaluates PRs based on:
 
 The workflow performs a comprehensive evaluation in these steps:
 
@@ -112,7 +126,7 @@ The workflow performs a comprehensive evaluation in these steps:
      - Creates a review requesting changes with a checklist of items to address
      - Does NOT add the `automerge` label
 
-### Using Auto-merge
+### Workflow Behavior
 
 **You don't need to do anything special to use auto-merge!**
 

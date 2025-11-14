@@ -4,9 +4,11 @@ on:
   push:
     paths:
       - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
   pull_request:
     paths:
       - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
 
 permissions:
   contents: read
@@ -27,6 +29,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: ./frontend
         run: |
           if [ -f frontend/package.json ]; then
             cd frontend
