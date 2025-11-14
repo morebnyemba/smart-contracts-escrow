@@ -13,7 +13,6 @@ permissions:
 jobs:
   evaluate-and-merge:
     runs-on: ubuntu-latest
-    # Skip if PR is in draft state
     if: github.event.pull_request.draft == false
     
     steps:
@@ -63,11 +62,9 @@ jobs:
             for (const review of reviews.data) {
               if (review.state === 'APPROVED') {
                 approvers.add(review.user.login);
-                // Remove from change requesters if they previously requested changes
                 changeRequesters.delete(review.user.login);
               } else if (review.state === 'CHANGES_REQUESTED') {
                 changeRequesters.add(review.user.login);
-                // Remove from approvers if they now request changes
                 approvers.delete(review.user.login);
               }
             }
@@ -111,34 +108,38 @@ jobs:
             }
             
             const heuristicSummary = heuristicFlags.length > 0 
-              ? '\n\n**Heuristic Flags:**\n' + heuristicFlags.join('\n')
+              ? '\n\n### Heuristic Flags\n' + heuristicFlags.join('\n')
               : '';
             
-            const summaryComment = `## 🤖 Auto-merge Evaluation Summary
-
-**PR:** #${prNumber} - ${pr.data.title}
-**Head SHA:** ${pr.data.head.sha}
-
-### Evaluation Criteria
-- ✅ **Approvals:** ${approvalCount} (required: ≥1)
-- ${hasChangeRequests ? '❌' : '✅'} **Change Requests:** ${hasChangeRequests ? 'Yes' : 'No'}
-- ${failingCount === 0 ? '✅' : '❌'} **Failing Checks:** ${failingCount}
-
-### Details
-**Approvers:** ${approversList}
-**Change Requesters:** ${changeRequestersList}
-**Total Changed Lines:** ${totalChangedLines}
-**Files Changed:** ${files.data.length}
-
-### Check Runs Status
-${checkRunsSummary}
-
-${failingCount > 0 ? '### Failing Checks\n' + failingChecksList : ''}${heuristicSummary}
-
----
-**Merge Eligible:** ${criteriaPass ? '✅ YES' : '❌ NO'}
-${criteriaPass ? '_This PR meets all criteria. The `automerge` label will be asserted and the PR will be merged._' : '_This PR does not meet all criteria yet._'}
-`;
+            const summaryComment = [
+              '## 🤖 Auto-merge Evaluation Summary',
+              '',
+              `PR: #${prNumber} - ${pr.data.title}`,
+              `Head SHA: ${pr.data.head.sha}`,
+              '',
+              '### Evaluation Criteria',
+              `- ${approvalCount >= 1 ? '✅' : '❌'} Approvals: ${approvalCount} (required: ≥1)`,
+              `- ${hasChangeRequests ? '❌' : '✅'} Change Requests: ${hasChangeRequests ? 'Yes' : 'No'}`,
+              `- ${failingCount === 0 ? '✅' : '❌'} Failing Checks: ${failingCount}`,
+              '',
+              '### Details',
+              `Approvers: ${approversList}`,
+              `Change Requesters: ${changeRequestersList}`,
+              `Total Changed Lines: ${totalChangedLines}`,
+              `Files Changed: ${files.data.length}`,
+              '',
+              '### Check Runs Status',
+              checkRunsSummary,
+              '',
+              failingCount > 0 ? '### Failing Checks\n' + failingChecksList : '',
+              heuristicSummary,
+              '',
+              '---',
+              `Merge Eligible: ${criteriaPass ? '✅ YES' : '❌ NO'}`,
+              criteriaPass 
+                ? 'This PR meets all criteria. The automerge label will be asserted and the PR will be merged.' 
+                : 'This PR does not meet all criteria yet.'
+            ].join('\n');
             
             // Post the summary comment
             await github.rest.issues.createComment({
@@ -167,13 +168,15 @@ ${criteriaPass ? '_This PR meets all criteria. The `automerge` label will be ass
                 checklist.push(`- [ ] Fix ${failingCount} failing check(s)`);
               }
               
-              const reviewBody = `## ⚠️ Auto-merge Criteria Not Met
-
-This PR does not yet meet the criteria for auto-merge. Please address the following:
-
-${checklist.join('\n')}
-
-Once these items are resolved, the PR will be re-evaluated automatically.`;
+              const reviewBody = [
+                '## ⚠️ Auto-merge Criteria Not Met',
+                '',
+                'This PR does not yet meet the criteria for auto-merge. Please address the following:',
+                '',
+                checklist.join('\n'),
+                '',
+                'Once these items are resolved, the PR will be re-evaluated automatically.'
+              ].join('\n');
               
               // Create a review requesting changes
               await github.rest.pulls.createReview({
