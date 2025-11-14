@@ -2,8 +2,8 @@ name: PR Iterator - Review All Open PRs
 
 on:
   schedule:
-    # Run every hour to check all open PRs
-    - cron: '0 * * * *'
+    # Run every 15 minutes to check all open PRs
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     # Allow manual trigger
 
@@ -34,12 +34,6 @@ jobs:
             
             for (const pr of pullRequests) {
               console.log(`\n--- Processing PR #${pr.number}: ${pr.title} ---`);
-              
-              // Skip draft PRs
-              if (pr.draft) {
-                console.log(`PR #${pr.number} is a draft, skipping`);
-                continue;
-              }
               
               // Fetch reviews for this PR
               const { data: reviews } = await github.rest.pulls.listReviews({
@@ -141,7 +135,7 @@ jobs:
                 if (failingChecks.length > 0) commentBody += '- [ ] Fix failing CI checks\n';
                 if (isStale) commentBody += '- [ ] Rebase on latest main branch\n- [ ] Confirm this PR is still relevant\n';
                 commentBody += '\n---\n';
-                commentBody += '*This is an automated check running every hour. If this PR should be closed, please close it to prevent future notifications.*';
+                commentBody += '*This is an automated check running every 15 minutes. If this PR should be closed, please close it to prevent future notifications.*';
 
                 // Check if we've already posted a similar comment recently
                 const { data: comments } = await github.rest.issues.listComments({
