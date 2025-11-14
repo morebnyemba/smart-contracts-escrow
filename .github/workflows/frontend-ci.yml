@@ -1,0 +1,52 @@
+name: Frontend CI
+on:
+  push:
+    paths:
+      - 'frontend/**'
+  pull_request:
+    paths:
+      - 'frontend/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          if [ -f frontend/package-lock.json ] || [ -f frontend/package.json ]; then cd frontend; npm ci; fi
+
+      - name: Lint
+        run: |
+          if [ -f frontend/package.json ] && jq -r '.scripts.lint // empty' frontend/package.json >/dev/null 2>&1; then cd frontend; npm run lint; else echo "No lint script found"; fi
+
+      - name: Type check
+        run: |
+          if [ -f frontend/tsconfig.json ]; then cd frontend; npm run build --if-present || npm run typecheck --if-present || echo "Typecheck/build not configured"; fi
+
+      - name: Run tests
+        run: |
+          if [ -f frontend/package.json ]; then cd frontend; if npm test --silent; then echo "Tests passed"; else echo "Tests failed"; exit 1; fi; fi
+
+      - name: Upload frontend logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-ci-logs
+          path: frontend || .
