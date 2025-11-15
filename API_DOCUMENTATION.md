@@ -16,54 +16,111 @@ All API endpoints require authentication. The API uses Django REST Framework's S
 
 ## API Endpoints
 
-### Seller Onboarding
+### Portal Endpoints
 
-#### Create/Update Seller Profile
+Portal endpoints provide specialized views for buyers and sellers to manage their transactions.
 
-Create or update a seller profile for the authenticated user.
+#### Buyer Dashboard
 
-**Endpoint:** `POST /api/onboarding/seller/`
+Get all transactions where the authenticated user is the buyer.
 
-**Authorization:** Requires authentication.
+**Endpoint:** `GET /api/portal/my-transactions/`
 
-**Request Body (multipart/form-data or JSON):**
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
 ```json
 {
-  "account_type": "INDIVIDUAL",
-  "company_name": "Optional Company Name",
-  "bio": "Brief description of services and expertise",
-  "profile_picture": "<file>",
-  "verification_document": "<file>",
-  "skill_ids": [1, 2, 3]
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
 }
 ```
 
-**Response:** (201 Created or 200 OK)
+**Features:**
+- Returns only transactions where the authenticated user is the buyer
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+#### Seller Dashboard
+
+Get all transactions where the authenticated user is the seller.
+
+**Endpoint:** `GET /api/portal/seller/`
+
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
 ```json
 {
-  "id": 1,
-  "public_seller_id": "068daef4-7f5d-40c1-b8cd-968b2ac5f4a9",
-  "account_type": "INDIVIDUAL",
-  "company_name": null,
-  "bio": "I am a Python and Django developer",
-  "profile_picture": null,
-  "verification_document": "/media/verification_docs/doc.pdf",
-  "verification_status": "PENDING",
-  "skills": [
-    {"name": "Python Development", "slug": "python-dev"},
-    {"name": "Django", "slug": "django"}
-  ],
-  "created_at": "2025-11-15T10:20:16Z",
-  "updated_at": "2025-11-15T10:20:16Z"
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
 }
 ```
 
-**Notes:**
-- If a seller profile already exists for the user, it will be updated instead of creating a new one
-- When `verification_document` is submitted, `verification_status` is automatically set to `PENDING`
-- Admin users are notified via email when a profile is submitted for verification
-- `account_type` can be either `INDIVIDUAL` or `COMPANY`
-- `skill_ids` is an optional array of ServiceCategory IDs
+**Features:**
+- Returns only transactions where the authenticated user is the seller
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+**Retrieve Individual Transaction:**
+
+Sellers can retrieve details of a specific transaction:
+
+**Endpoint:** `GET /api/portal/seller/{id}/`
+
+**Response:** (200 OK) - Returns single transaction object
 
 ### Transactions
 
