@@ -1,65 +1,15 @@
 'use client';
 
 import styles from './page.module.css';
-
-// Mock data - in a real app, this would come from API/store
-const stats = {
-  activeTransactions: 3,
-  pendingWork: 5,
-  totalEarnings: 1250.00,
-  completedProjects: 12,
-};
-
-const activeTransactions = [
-  {
-    id: 1,
-    title: 'E-commerce Website Development',
-    buyer: 'John Doe',
-    amount: 500.00,
-    status: 'in_progress',
-    statusLabel: 'In Progress',
-  },
-  {
-    id: 2,
-    title: 'Mobile App UI Design',
-    buyer: 'Jane Smith',
-    amount: 350.00,
-    status: 'review',
-    statusLabel: 'Under Review',
-  },
-  {
-    id: 3,
-    title: 'Logo Design Package',
-    buyer: 'Tech Startup Inc',
-    amount: 200.00,
-    status: 'pending',
-    statusLabel: 'Pending',
-  },
-];
-
-const pendingWork = [
-  {
-    id: 101,
-    title: 'Homepage Design',
-    project: 'E-commerce Website Development',
-    dueDate: '2 days',
-  },
-  {
-    id: 102,
-    title: 'Product Catalog',
-    project: 'E-commerce Website Development',
-    dueDate: '5 days',
-  },
-  {
-    id: 103,
-    title: 'Final UI Mockups',
-    project: 'Mobile App UI Design',
-    dueDate: '1 day',
-  },
-];
+import { mockStats, mockActiveTransactions, mockPendingWork } from './mockData';
+import { Transaction } from './types';
 
 export default function SellerPortal() {
-  const getStatusBadgeClass = (status: string) => {
+  const stats = mockStats;
+  const activeTransactions = mockActiveTransactions;
+  const pendingWork = mockPendingWork;
+
+  const getStatusBadgeClass = (status: Transaction['status']) => {
     switch (status) {
       case 'pending':
         return styles.pending;
@@ -72,6 +22,26 @@ export default function SellerPortal() {
       default:
         return styles.pending;
     }
+  };
+
+  const handleViewAllTransactions = () => {
+    console.log('Navigate to all transactions');
+    // TODO: Implement navigation to full transactions list
+  };
+
+  const handleViewAllWorkItems = () => {
+    console.log('Navigate to all work items');
+    // TODO: Implement navigation to full work items list
+  };
+
+  const handleSubmitWork = (workItemId: number) => {
+    console.log('Submit work for item:', workItemId);
+    // TODO: Implement work submission logic
+  };
+
+  const handleTransactionClick = (transactionId: number) => {
+    console.log('View transaction details:', transactionId);
+    // TODO: Implement navigation to transaction details page
   };
 
   return (
@@ -111,11 +81,21 @@ export default function SellerPortal() {
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h2>Active Transactions</h2>
-            <button className={styles.viewAllButton}>View All</button>
+            <button 
+              className={styles.viewAllButton}
+              onClick={handleViewAllTransactions}
+            >
+              View All
+            </button>
           </div>
           <div className={styles.transactionsList}>
             {activeTransactions.map((transaction) => (
-              <div key={transaction.id} className={styles.transactionCard}>
+              <button
+                key={transaction.id}
+                className={styles.transactionCard}
+                onClick={() => handleTransactionClick(transaction.id)}
+                aria-label={`View details for ${transaction.title}`}
+              >
                 <div className={styles.transactionInfo}>
                   <h4>{transaction.title}</h4>
                   <p>Buyer: {transaction.buyer}</p>
@@ -126,7 +106,7 @@ export default function SellerPortal() {
                   </span>
                   <span className={styles.amount}>${transaction.amount.toFixed(2)}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -135,7 +115,12 @@ export default function SellerPortal() {
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h2>Pending Work Items</h2>
-            <button className={styles.viewAllButton}>View All</button>
+            <button 
+              className={styles.viewAllButton}
+              onClick={handleViewAllWorkItems}
+            >
+              View All
+            </button>
           </div>
           {pendingWork.length > 0 ? (
             <div className={styles.workItemsList}>
@@ -145,7 +130,12 @@ export default function SellerPortal() {
                     <h4>{item.title}</h4>
                     <p>{item.project} • Due in {item.dueDate}</p>
                   </div>
-                  <button className={styles.submitButton}>Submit Work</button>
+                  <button 
+                    className={styles.submitButton}
+                    onClick={() => handleSubmitWork(item.id)}
+                  >
+                    Submit Work
+                  </button>
                 </div>
               ))}
             </div>
