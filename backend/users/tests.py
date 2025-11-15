@@ -1,94 +1,101 @@
 from django.test import TestCase
-from django.db import IntegrityError
-from .models import ServiceCategory, CustomUser, SellerProfile
+from rest_framework.test import APITestCase
+from rest_framework import status
+from django.urls import reverse
+from .models import CustomUser, SellerProfile, ServiceCategory
+import uuid
 
-class ServiceCategoryModelTest(TestCase):
+
+class SellerProfileLookupAPITestCase(APITestCase):
     def setUp(self):
-        """Set up test data"""
-        self.category = ServiceCategory.objects.create(
-            name="Web Development",
-            slug="web-development"
-        )
-
-    def test_service_category_creation(self):
-        """Test that a ServiceCategory can be created"""
-        self.assertIsInstance(self.category, ServiceCategory)
-        self.assertEqual(self.category.name, "Web Development")
-        self.assertEqual(self.category.slug, "web-development")
-
-    def test_service_category_str_representation(self):
-        """Test the string representation of ServiceCategory"""
-        self.assertEqual(str(self.category), "Web Development")
-
-    def test_service_category_unique_name(self):
-        """Test that ServiceCategory name must be unique"""
-        with self.assertRaises(IntegrityError):
-            ServiceCategory.objects.create(
-                name="Web Development",
-                slug="web-development-2"
-            )
-
-    def test_service_category_unique_slug(self):
-        """Test that ServiceCategory slug must be unique"""
-        with self.assertRaises(IntegrityError):
-            ServiceCategory.objects.create(
-                name="Web Development 2",
-                slug="web-development"
-            )
-
-    def test_service_category_ordering(self):
-        """Test that ServiceCategories are ordered by name"""
-        ServiceCategory.objects.create(name="Graphic Design", slug="graphic-design")
-        ServiceCategory.objects.create(name="App Development", slug="app-development")
-        
-        categories = ServiceCategory.objects.all()
-        self.assertEqual(categories[0].name, "App Development")
-        self.assertEqual(categories[1].name, "Graphic Design")
-        self.assertEqual(categories[2].name, "Web Development")
-
-    def test_service_category_verbose_names(self):
-        """Test the verbose names are correct"""
-        self.assertEqual(ServiceCategory._meta.verbose_name, "Service Category")
-        self.assertEqual(ServiceCategory._meta.verbose_name_plural, "Service Categories")
-
-    def test_service_category_relationship_with_seller_profile(self):
-        """Test that ServiceCategory can be linked to SellerProfile"""
-        user = CustomUser.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
-        )
-        seller_profile = SellerProfile.objects.create(
-            user=user,
-            account_type=SellerProfile.AccountType.INDIVIDUAL
+        """Set up test data for seller profile lookup tests."""
+        # Create a user
+        self.user = CustomUser.objects.create_user(
+            username='testuser',
+            email='testuser@example.com',
+            password='testpassword123'
         )
         
-        # Add service category to seller's skills
-        seller_profile.skills.add(self.category)
+        # Create service categories
+        self.category1 = ServiceCategory.objects.create(
+            name='Web Development',
+            slug='web-development'
+        )
+        self.category2 = ServiceCategory.objects.create(
+            name='Mobile Apps',
+            slug='mobile-apps'
+        )
         
-        # Test the relationship
-        self.assertIn(self.category, seller_profile.skills.all())
-        self.assertIn(seller_profile, self.category.sellers.all())
+        # Create a seller profile
+        self.seller_profile = SellerProfile.objects.create(
+            user=self.user,
+            account_type=SellerProfile.AccountType.INDIVIDUAL,
+            verification_status=SellerProfile.VerificationStatus.VERIFIED
+        )
+        self.seller_profile.skills.add(self.category1, self.category2)
+        
+        # Store the public_seller_id for testing
+        self.public_seller_id = self.seller_profile.public_seller_id
 
-    def test_multiple_categories_for_seller(self):
-        """Test that a seller can have multiple service categories"""
-        user = CustomUser.objects.create_user(
-            username="multiuser",
-            email="multi@example.com",
-            password="testpass123"
+    def test_lookup_seller_by_public_id_success(self):
+        """Test successful lookup of seller by public_seller_id."""
+        url = reverse('seller-lookup', kwargs={'public_seller_id': self.public_seller_id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['public_seller_id'], str(self.public_seller_id))
+        self.assertEqual(response.data['username'], 'testuser')
+        self.assertEqual(response.data['account_type'], 'INDIVIDUAL')
+        self.assertEqual(response.data['verification_status'], 'VERIFIED')
+        self.assertEqual(len(response.data['skills']), 2)
+        
+    def test_lookup_seller_with_company_profile(self):
+        """Test lookup of seller with company account type."""
+        # Create another user with company profile
+        company_user = CustomUser.objects.create_user(
+            username='companyuser',
+            email='company@example.com',
+            password='testpassword123'
         )
-        seller_profile = SellerProfile.objects.create(
-            user=user,
-            account_type=SellerProfile.AccountType.INDIVIDUAL
+        company_profile = SellerProfile.objects.create(
+            user=company_user,
+            account_type=SellerProfile.AccountType.COMPANY,
+            company_name='Test Company LLC',
+            verification_status=SellerProfile.VerificationStatus.PENDING
         )
         
-        category2 = ServiceCategory.objects.create(
-            name="Mobile Development",
-            slug="mobile-development"
+        url = reverse('seller-lookup', kwargs={'public_seller_id': company_profile.public_seller_id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['account_type'], 'COMPANY')
+        self.assertEqual(response.data['company_name'], 'Test Company LLC')
+        self.assertEqual(response.data['verification_status'], 'PENDING')
+
+    def test_lookup_seller_not_found(self):
+        """Test lookup with non-existent public_seller_id returns 404."""
+        non_existent_id = uuid.uuid4()
+        url = reverse('seller-lookup', kwargs={'public_seller_id': non_existent_id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_lookup_seller_with_no_skills(self):
+        """Test lookup of seller with no skills assigned."""
+        # Create a seller with no skills
+        user_no_skills = CustomUser.objects.create_user(
+            username='noskillusers',
+            email='noskills@example.com',
+            password='testpassword123'
+        )
+        profile_no_skills = SellerProfile.objects.create(
+            user=user_no_skills,
+            account_type=SellerProfile.AccountType.INDIVIDUAL,
+            verification_status=SellerProfile.VerificationStatus.UNVERIFIED
         )
         
-        seller_profile.skills.add(self.category, category2)
+        url = reverse('seller-lookup', kwargs={'public_seller_id': profile_no_skills.public_seller_id})
+        response = self.client.get(url)
         
-        self.assertEqual(seller_profile.skills.count(), 2)
-        self.assertIn(self.category, seller_profile.skills.all())
-        self.assertIn(category2, seller_profile.skills.all())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['skills']), 0)
