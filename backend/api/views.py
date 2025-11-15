@@ -6,6 +6,7 @@ from django.db import transaction as db_transaction
 from django.shortcuts import get_object_or_404
 
 from transactions.models import EscrowTransaction, Milestone
+from transactions.signals import milestone_approved, transaction_funded, revision_requested
 from wallets.models import UserWallet
 from .serializers import (
     EscrowTransactionSerializer,
@@ -89,6 +90,14 @@ class EscrowTransactionViewSet(viewsets.ModelViewSet):
             # Update transaction status
             transaction_obj.status = EscrowTransaction.TransactionStatus.IN_ESCROW
             transaction_obj.save()
+            
+            # Send signal for transaction funded
+            transaction_funded.send(
+                sender=self.__class__,
+                transaction=transaction_obj,
+                buyer=transaction_obj.buyer,
+                seller=transaction_obj.seller
+            )
         
         serializer = self.get_serializer(transaction_obj)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -193,6 +202,14 @@ class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
             if all_completed:
                 transaction_obj.status = EscrowTransaction.TransactionStatus.COMPLETED
                 transaction_obj.save()
+            
+            # Send signal for milestone approved
+            milestone_approved.send(
+                sender=self.__class__,
+                milestone=milestone,
+                buyer=transaction_obj.buyer,
+                seller=transaction_obj.seller
+            )
         
         serializer = self.get_serializer(milestone)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -222,6 +239,14 @@ class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
         # Update milestone status
         milestone.status = Milestone.MilestoneStatus.REVISION_REQUESTED
         milestone.save()
+        
+        # Send signal for revision requested
+        revision_requested.send(
+            sender=self.__class__,
+            milestone=milestone,
+            buyer=transaction_obj.buyer,
+            seller=transaction_obj.seller
+        )
         
         serializer = self.get_serializer(milestone)
         return Response(serializer.data, status=status.HTTP_200_OK)

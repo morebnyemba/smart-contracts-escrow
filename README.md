@@ -108,10 +108,34 @@ Security features include:
 - Status validation for all state transitions
 - Input validation for all API endpoints
 
+## Asynchronous Task Processing
+
+The platform now includes Celery and Celery Beat for handling long-running tasks asynchronously:
+
+- ✅ **Email Notifications**: Send emails without blocking requests
+- ✅ **Transaction Notifications**: Notify users about transaction updates
+- ✅ **Scheduled Tasks**: Daily summaries, cleanup tasks, and overdue reminders
+- ✅ **Extensible Architecture**: Easy to add new background tasks
+
+See [backend/CELERY_SETUP.md](./backend/CELERY_SETUP.md) for detailed setup and usage instructions.
+
+### Running Celery
+
+```bash
+# Start Redis (message broker)
+redis-server
+
+# Start Celery worker (in backend directory)
+celery -A backend worker --loglevel=info
+
+# Start Celery Beat for scheduled tasks
+celery -A backend beat --loglevel=info
+```
+
 ## Next Steps
 
 - [ ] Implement dispute resolution mechanism
-- [ ] Add notification system
+- [x] Add notification system
 - [ ] Implement review system
 - [ ] Add payment gateway integration
 - [ ] Enhance seller discovery features

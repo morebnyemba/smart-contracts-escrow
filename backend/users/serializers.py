@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import SellerProfile, ServiceCategory
+from .models import SellerProfile, ServiceCategory, CustomUser
+from wallets.models import UserWallet
 
 
 class ServiceCategorySerializer(serializers.ModelSerializer):

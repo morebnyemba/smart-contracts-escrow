@@ -4,6 +4,7 @@ from rest_framework import status
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from .models import CustomUser, SellerProfile, ServiceCategory
+from wallets.models import UserWallet
 import uuid
 
 
