@@ -3,6 +3,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
 from .models import CustomUser, SellerProfile, ServiceCategory
+from wallets.models import UserWallet
 import uuid
 
 
@@ -99,3 +100,122 @@ class SellerProfileLookupAPITestCase(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['skills']), 0)
+
+
+class UserRegistrationAPITestCase(APITestCase):
+    def test_register_user_success(self):
+        """Test successful user registration."""
+        url = reverse('register')
+        data = {
+            'username': 'newuser',
+            'email': 'newuser@example.com',
+            'password': 'securepassword123'
+        }
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('message', response.data)
+        self.assertEqual(response.data['message'], 'User registered successfully')
+        
+        # Verify user was created
+        self.assertTrue(CustomUser.objects.filter(username='newuser').exists())
+        user = CustomUser.objects.get(username='newuser')
+        self.assertEqual(user.email, 'newuser@example.com')
+        
+        # Verify password is hashed
+        self.assertTrue(user.check_password('securepassword123'))
+        
+        # Verify wallet was created
+        self.assertTrue(UserWallet.objects.filter(user=user).exists())
+        wallet = UserWallet.objects.get(user=user)
+        self.assertEqual(wallet.balance, 0.00)
+    
+    def test_register_user_missing_username(self):
+        """Test registration fails with missing username."""
+        url = reverse('register')
+        data = {
+            'email': 'newuser@example.com',
+            'password': 'securepassword123'
+        }
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', response.data)
+    
+    def test_register_user_missing_email(self):
+        """Test registration fails with missing email."""
+        url = reverse('register')
+        data = {
+            'username': 'newuser',
+            'password': 'securepassword123'
+        }
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+    
+    def test_register_user_missing_password(self):
+        """Test registration fails with missing password."""
+        url = reverse('register')
+        data = {
+            'username': 'newuser',
+            'email': 'newuser@example.com'
+        }
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+    
+    def test_register_user_duplicate_username(self):
+        """Test registration fails with duplicate username."""
+        # Create existing user
+        CustomUser.objects.create_user(
+            username='existinguser',
+            email='existing@example.com',
+            password='password123'
+        )
+        
+        url = reverse('register')
+        data = {
+            'username': 'existinguser',
+            'email': 'newemail@example.com',
+            'password': 'securepassword123'
+        }
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', response.data)
+    
+    def test_register_user_duplicate_email(self):
+        """Test registration fails with duplicate email."""
+        # Create existing user
+        CustomUser.objects.create_user(
+            username='existinguser',
+            email='existing@example.com',
+            password='password123'
+        )
+        
+        url = reverse('register')
+        data = {
+            'username': 'newuser',
+            'email': 'existing@example.com',
+            'password': 'securepassword123'
+        }
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+    
+    def test_register_endpoint_public(self):
+        """Test that registration endpoint doesn't require authentication."""
+        url = reverse('register')
+        data = {
+            'username': 'publicuser',
+            'email': 'public@example.com',
+            'password': 'securepassword123'
+        }
+        # Make request without authentication
+        response = self.client.post(url, data, format='json')
+        
+        # Should succeed without authentication
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
