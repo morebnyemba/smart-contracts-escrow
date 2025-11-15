@@ -11,6 +11,7 @@ This document describes the GitHub Actions workflows and Dependabot configuratio
 - [PR Iterator Workflow](#pr-iterator-workflow)
 - [Auto-approve Workflow](#auto-approve-workflow)
 - [Gemini PR Review](#gemini-pr-review)
+- [Auto Review on "needs-review" Label](#auto-review-on-needs-review-label)
 - [Dependabot Configuration](#dependabot-configuration)
 - [Usage Guide](#usage-guide)
 
@@ -292,6 +293,101 @@ If no API key is configured, uses a simple heuristic:
 - Comments on large changes (>2000 lines)
 
 **Security Note**: Uses `pull_request_target` to ensure workflow runs with proper permissions to review and merge PRs.
+
+## Auto Review on "needs-review" Label
+
+The **Auto Review on Needs Review Label** workflow (`.github/workflows/auto-review-on-label.yml`) provides automated code review specifically when the `needs-review` label is applied to a pull request.
+
+### When It Runs
+
+- Triggers on `pull_request_target` with type `labeled`
+- Only executes when the specific label added is `needs-review`
+- Works seamlessly with the PR Iterator workflow which automatically adds this label
+
+### How It Works
+
+1. **Label Detection**: Monitors for the `needs-review` label being added to any PR
+2. **Diff Generation**: Fetches the PR diff via GitHub API (avoiding untrusted code checkout)
+3. **Automated Review**: Analyzes the changes using one of three methods:
+   - **Gemini AI** (if `GEMINI_API_KEY` configured)
+   - **Custom Reviewer** (if `REVIEWER_URL` configured)
+   - **Heuristic Analysis** (fallback with built-in rules)
+4. **Review Submission**: Posts a review with one of these decisions:
+   - `APPROVE` - Changes look good
+   - `REQUEST_CHANGES` - Issues found that need to be addressed
+   - `COMMENT` - Feedback without blocking the PR
+
+### Configuration
+
+Uses the same secrets as Gemini PR Review:
+- `GEMINI_API_KEY` - Your Google Generative Language API key
+- `GEMINI_MODEL` - Model name (default: `models/text-bison-001`)
+- `REVIEWER_URL` - Alternative custom reviewer endpoint
+- `REVIEWER_KEY` - API key for custom reviewer
+- `REVIEW_DECISION` - (Optional) Force a specific decision for testing
+- `AUTO_MERGE` - (Optional) Enable automatic merge on approval
+
+### Heuristic Analysis (Fallback)
+
+When no external reviewer is configured, the workflow uses intelligent heuristic analysis:
+
+**Checks for Issues:**
+- ❌ TODO/FIXME markers (requests changes if found)
+- 💡 Debug statements (console.log, print) - recommends removal
+- 💡 Missing tests for substantial changes (>50 lines)
+- ⚠️ Large changes (>2000 lines) - suggests breaking into smaller PRs
+
+**Automatic Decisions:**
+- **Approve**: Small changes (<60 lines) with no issues
+- **Request Changes**: TODO/FIXME markers present
+- **Comment**: Large changes or when recommendations but no blocking issues
+
+### Integration with PR Iterator
+
+This workflow is designed to work in tandem with the PR Iterator workflow:
+
+1. **PR Iterator** runs every 15 minutes and adds the `needs-review` label to PRs without reviews
+2. **Auto Review on Label** immediately triggers and performs an automated review
+3. This ensures PRs get timely feedback even when human reviewers are unavailable
+
+### Benefits
+
+- **Immediate Feedback**: PRs receive automated feedback as soon as they need review
+- **No Manual Trigger Required**: Automatically triggered by the PR Iterator workflow
+- **Part of Automated Checks**: Integrates seamlessly with CI/CD pipeline
+- **Consistent Reviews**: Ensures all PRs get reviewed against standard criteria
+- **Human Reviewer Backup**: Provides preliminary feedback while waiting for human reviews
+- **Configurable Intelligence**: Works with basic heuristics or advanced AI models
+
+### Permissions
+
+The workflow uses minimal, least-privilege permissions:
+- `contents: read` - Read repository contents and PR diffs
+- `pull-requests: write` - Post reviews and comments
+- `checks: read` - Read check run status
+- `statuses: read` - Read commit statuses
+
+### Security
+
+- Uses `pull_request_target` to run in the context of the base repository (trusted)
+- Never checks out untrusted code from the PR
+- Fetches diffs via GitHub API only
+- All operations logged for audit purposes
+
+### Use Cases
+
+**Ideal for:**
+- PRs from external contributors waiting for maintainer review
+- Catching common issues early (TODO markers, missing tests, debug code)
+- Providing consistent baseline review criteria
+- Reducing review bottlenecks during high-activity periods
+
+**Example Workflow:**
+1. Developer opens a PR
+2. PR Iterator detects no reviews and adds `needs-review` label
+3. Auto Review workflow triggers immediately
+4. Automated review posts findings (approve/comment/request changes)
+5. Human reviewers can focus on logic and architecture rather than basic issues
 
 ## Dependabot Configuration
 
