@@ -9,7 +9,7 @@ from .serializers import SellerProfileSerializer, ServiceCategorySerializer
 class SellerProfileViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for viewing seller profiles.
-    Supports filtering by verification status and searching by username, company name, or skills.
+    Supports filtering by verification status and specific skills (using the `?skills=` parameter with comma-separated skill IDs or slugs), and searching by username, company name, or skill names (using the `?search=` parameter).
     """
     queryset = SellerProfile.objects.select_related('user').prefetch_related('skills').order_by('-id')
     serializer_class = SellerProfileSerializer
@@ -29,7 +29,7 @@ class SellerProfileViewSet(viewsets.ReadOnlyModelViewSet):
         if skills:
             skill_list = [s.strip() for s in skills.split(',')]
             # Check if they are numeric IDs or slugs
-            skill_ids = [s for s in skill_list if s.isdigit()]
+            skill_ids = [int(s) for s in skill_list if s.isdigit()]
             skill_slugs = [s for s in skill_list if not s.isdigit()]
             
             q_filter = Q()

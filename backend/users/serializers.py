@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SellerProfile, ServiceCategory, CustomUser
+from .models import SellerProfile, ServiceCategory
 
 
 class ServiceCategorySerializer(serializers.ModelSerializer):

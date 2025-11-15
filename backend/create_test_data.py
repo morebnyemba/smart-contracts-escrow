@@ -79,7 +79,7 @@ for seller_data in sellers_data:
     user, created = CustomUser.objects.get_or_create(
         username=seller_data['username'],
         email=seller_data['email'],
-        defaults={'password': seller_data['password']}
+        defaults={}
     )
     if created:
         user.set_password(seller_data['password'])
