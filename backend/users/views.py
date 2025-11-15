@@ -1,12 +1,21 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
+from django.contrib.auth import authenticate
 from django.db.models import Q
 from django.core.mail import mail_admins
+from rest_framework_simplejwt.tokens import RefreshToken
 from .models import SellerProfile, ServiceCategory
-from .serializers import SellerProfileSerializer, ServiceCategorySerializer, SellerOnboardingSerializer
+from .serializers import (
+    SellerProfileSerializer, 
+    ServiceCategorySerializer, 
+    SellerOnboardingSerializer,
+    RegisterSerializer,
+    LoginSerializer,
+    UserSerializer
+)
 
 
 class SellerProfileViewSet(viewsets.ReadOnlyModelViewSet):
@@ -114,4 +123,71 @@ class SellerOnboardingView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK if is_update else status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RegisterView(APIView):
+    """
+    API endpoint for user registration.
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'user': UserSerializer(user).data,
+                'tokens': {
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh),
+                }
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LoginView(APIView):
+    """
+    API endpoint for user login.
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']
+            password = serializer.validated_data['password']
+            
+            user = authenticate(username=username, password=password)
+            
+            if user is not None:
+                # Generate JWT tokens
+                refresh = RefreshToken.for_user(user)
+                
+                return Response({
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh),
+                }, status=status.HTTP_200_OK)
+            
+            return Response(
+                {'detail': 'Invalid credentials'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CurrentUserView(APIView):
+    """
+    API endpoint to get current authenticated user details.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
