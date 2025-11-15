@@ -73,6 +73,14 @@ The **Auto-approve Workflow** (`.github/workflows/auto-approve-workflows.yml`) a
 
 The **Gemini PR Review** workflow (`.github/workflows/gemini-pr-review.yml`) provides AI-powered code review using Google's Gemini model. Configure `GEMINI_API_KEY` in repository secrets to enable automatic code reviews on all PRs.
 
+### Auto Review on "needs-review" Label
+
+The **Auto Review on Needs Review Label** workflow (`.github/workflows/auto-review-on-label.yml`) automatically triggers a code review when the `needs-review` label is applied to a PR. This workflow:
+- Runs as part of automated checks when the PR Iterator adds the `needs-review` label
+- Uses the same AI-powered review logic as Gemini PR Review
+- Can be configured with `GEMINI_API_KEY` for AI reviews, or uses heuristic analysis as fallback
+- Helps ensure PRs receive timely feedback even when reviewers are unavailable
+
 ### Dependabot Configuration
 
 Dependabot (`.github/dependabot.yml`) is configured to automatically check for dependency updates weekly:
