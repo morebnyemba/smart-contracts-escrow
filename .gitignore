@@ -6,6 +6,8 @@ db.sqlite3
 /media
 backend/media/
 cookies.txt
+backend/venv/
+venv/
 
 # Frontend (Next.js)
 .next/

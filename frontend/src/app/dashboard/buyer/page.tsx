@@ -112,8 +112,10 @@ export default function BuyerPortal() {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
-        <h1>Buyer Dashboard</h1>
-        <p className={styles.subtitle}>Manage your transactions and track progress</p>
+        <div>
+          <h1>Buyer Dashboard</h1>
+          <p className={styles.subtitle}>Manage your transactions and track progress</p>
+        </div>
       </header>
 
       <div className={styles.stats}>

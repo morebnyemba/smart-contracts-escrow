@@ -14,3 +14,6 @@ transaction_funded = Signal()
 
 # Signal sent when a buyer requests revision on a milestone
 revision_requested = Signal()
+
+# Signal sent when a seller submits work for a milestone
+work_submitted = Signal()
