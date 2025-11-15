@@ -92,6 +92,49 @@ class EscrowTransactionViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(transaction_obj)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        """
+        Seller accepts a transaction, moving it from PENDING_FUNDING to AWAITING_PAYMENT.
+        """
+        transaction_obj = self.get_object()
+        
+        # Validate seller
+        if transaction_obj.seller != request.user:
+            return Response(
+                {'error': 'Only the seller can accept this transaction.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Validate transaction status
+        if transaction_obj.status != EscrowTransaction.TransactionStatus.PENDING_FUNDING:
+            return Response(
+                {'error': f'Transaction cannot be accepted in {transaction_obj.status} status.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update transaction status
+        transaction_obj.status = EscrowTransaction.TransactionStatus.AWAITING_PAYMENT
+        transaction_obj.save()
+        
+        # Notify buyer and seller
+        # TODO: Replace with actual notification system (email, websocket, etc.)
+        self._notify_transaction_accepted(transaction_obj)
+        
+        serializer = self.get_serializer(transaction_obj)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def _notify_transaction_accepted(self, transaction_obj):
+        """
+        Notify buyer and seller that the transaction has been accepted.
+        This is a placeholder for future notification implementation.
+        """
+        # Placeholder for notification logic
+        # In production, this would send emails, push notifications, or WebSocket messages
+        print(f"Notification: Transaction '{transaction_obj.title}' (ID: {transaction_obj.id}) has been accepted by seller.")
+        print(f"  - Buyer ({transaction_obj.buyer.username}) notified")
+        print(f"  - Seller ({transaction_obj.seller.username}) notified")
 
 
 class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
