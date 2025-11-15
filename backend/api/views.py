@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 import logging
 
 from transactions.models import EscrowTransaction, Milestone
+from transactions.signals import milestone_approved, transaction_funded, revision_requested
 from wallets.models import UserWallet
 from .serializers import (
     EscrowTransactionSerializer,
@@ -92,9 +93,60 @@ class EscrowTransactionViewSet(viewsets.ModelViewSet):
             # Update transaction status
             transaction_obj.status = EscrowTransaction.TransactionStatus.IN_ESCROW
             transaction_obj.save()
+            
+            # Send signal for transaction funded
+            transaction_funded.send(
+                sender=self.__class__,
+                transaction=transaction_obj,
+                buyer=transaction_obj.buyer,
+                seller=transaction_obj.seller
+            )
         
         serializer = self.get_serializer(transaction_obj)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        """
+        Seller accepts a transaction, moving it from PENDING_FUNDING to AWAITING_PAYMENT.
+        """
+        transaction_obj = self.get_object()
+        
+        # Validate seller
+        if transaction_obj.seller != request.user:
+            return Response(
+                {'error': 'Only the seller can accept this transaction.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Validate transaction status
+        if transaction_obj.status != EscrowTransaction.TransactionStatus.PENDING_FUNDING:
+            return Response(
+                {'error': f'Transaction cannot be accepted in {transaction_obj.status} status.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update transaction status
+        transaction_obj.status = EscrowTransaction.TransactionStatus.AWAITING_PAYMENT
+        transaction_obj.save()
+        
+        # Notify buyer and seller
+        # TODO: Replace with actual notification system (email, websocket, etc.)
+        self._notify_transaction_accepted(transaction_obj)
+        
+        serializer = self.get_serializer(transaction_obj)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def _notify_transaction_accepted(self, transaction_obj):
+        """
+        Notify buyer and seller that the transaction has been accepted.
+        This is a placeholder for future notification implementation.
+        """
+        # Placeholder for notification logic
+        # In production, this would send emails, push notifications, or WebSocket messages
+        print(f"Notification: Transaction '{transaction_obj.title}' (ID: {transaction_obj.id}) has been accepted by seller.")
+        print(f"  - Buyer ({transaction_obj.buyer.username}) notified")
+        print(f"  - Seller ({transaction_obj.seller.username}) notified")
 
 
 class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
@@ -196,6 +248,14 @@ class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
             if all_completed:
                 transaction_obj.status = EscrowTransaction.TransactionStatus.COMPLETED
                 transaction_obj.save()
+            
+            # Send signal for milestone approved
+            milestone_approved.send(
+                sender=self.__class__,
+                milestone=milestone,
+                buyer=transaction_obj.buyer,
+                seller=transaction_obj.seller
+            )
         
         serializer = self.get_serializer(milestone)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -225,6 +285,14 @@ class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
         # Update milestone status
         milestone.status = Milestone.MilestoneStatus.REVISION_REQUESTED
         milestone.save()
+        
+        # Send signal for revision requested
+        revision_requested.send(
+            sender=self.__class__,
+            milestone=milestone,
+            buyer=transaction_obj.buyer,
+            seller=transaction_obj.seller
+        )
         
         serializer = self.get_serializer(milestone)
         return Response(serializer.data, status=status.HTTP_200_OK)

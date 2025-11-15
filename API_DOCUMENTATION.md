@@ -16,6 +16,112 @@ All API endpoints require authentication. The API uses Django REST Framework's S
 
 ## API Endpoints
 
+### Portal Endpoints
+
+Portal endpoints provide specialized views for buyers and sellers to manage their transactions.
+
+#### Buyer Dashboard
+
+Get all transactions where the authenticated user is the buyer.
+
+**Endpoint:** `GET /api/portal/my-transactions/`
+
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- Returns only transactions where the authenticated user is the buyer
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+#### Seller Dashboard
+
+Get all transactions where the authenticated user is the seller.
+
+**Endpoint:** `GET /api/portal/seller/`
+
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- Returns only transactions where the authenticated user is the seller
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+**Retrieve Individual Transaction:**
+
+Sellers can retrieve details of a specific transaction:
+
+**Endpoint:** `GET /api/portal/seller/{id}/`
+
+**Response:** (200 OK) - Returns single transaction object
+
 ### Transactions
 
 #### Create Transaction
@@ -129,6 +235,35 @@ Get details of a specific transaction.
   "milestones": [...]
 }
 ```
+
+#### Accept Transaction
+
+Seller accepts the transaction terms, moving it from PENDING_FUNDING to AWAITING_PAYMENT status.
+
+**Endpoint:** `POST /api/transactions/{id}/accept/`
+
+**Authorization:** Only the seller can accept the transaction.
+
+**Preconditions:**
+- Transaction status must be `PENDING_FUNDING`
+
+**Response:** (200 OK)
+```json
+{
+  "id": 1,
+  "title": "Website Development Project",
+  "total_value": "800.00",
+  "status": "AWAITING_PAYMENT",
+  ...
+}
+```
+
+**Side Effects:**
+- Both buyer and seller are notified of the status change
+
+**Error Responses:**
+- `403 Forbidden`: User is not the seller
+- `400 Bad Request`: Invalid transaction status
 
 #### Fund Transaction
 
@@ -369,24 +504,29 @@ Error responses include descriptive messages:
    POST /api/transactions/
    ```
 
-2. **Buyer funds transaction**
+2. **Seller accepts transaction**
+   ```
+   POST /api/transactions/1/accept/
+   ```
+
+3. **Buyer funds transaction**
    ```
    POST /api/transactions/1/fund/
    ```
 
-3. **Seller submits work**
+4. **Seller submits work**
    ```
    POST /api/milestones/1/submit/
    ```
 
-4. **Buyer approves milestone**
+5. **Buyer approves milestone**
    ```
    POST /api/milestones/1/approve/
    ```
 
-5. **Repeat steps 3-4 for all milestones**
+6. **Repeat steps 4-5 for all milestones**
 
-6. **Transaction automatically completes when all milestones are done**
+7. **Transaction automatically completes when all milestones are done**
 
 ### Dispute Flow
 
