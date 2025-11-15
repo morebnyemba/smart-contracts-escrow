@@ -1,35 +1,28 @@
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
-
-User = get_user_model()
+from .models import SellerProfile, ServiceCategory
 
 
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password2 = serializers.CharField(write_only=True, required=True)
-
+class ServiceCategorySerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = ('username', 'email', 'password', 'password2', 'first_name', 'last_name')
-        extra_kwargs = {
-            'first_name': {'required': False},
-            'last_name': {'required': False}
-        }
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
-        return attrs
-
-    def create(self, validated_data):
-        validated_data.pop('password2')
-        user = User.objects.create_user(**validated_data)
-        return user
+        model = ServiceCategory
+        fields = ['id', 'name', 'slug']
 
 
-class UserSerializer(serializers.ModelSerializer):
+class SellerProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+    skills = ServiceCategorySerializer(many=True, read_only=True)
+    
     class Meta:
-        model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name')
-        read_only_fields = ('id',)
+        model = SellerProfile
+        fields = [
+            'id',
+            'public_seller_id',
+            'username',
+            'email',
+            'account_type',
+            'company_name',
+            'verification_status',
+            'skills',
+        ]
+        read_only_fields = ['public_seller_id', 'verification_status']
