@@ -1,0 +1,60 @@
+name: Auto-approve Workflow Runs
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  auto-approve-workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Approve pending workflow runs
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            
+            console.log(`Checking for pending workflow runs on PR #${pr.number}`);
+            
+            // Get workflow runs for this PR
+            const { data: workflowRuns } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event: 'pull_request',
+              per_page: 100
+            });
+            
+            // Filter to runs for this PR that are waiting for approval
+            const pendingRuns = workflowRuns.workflow_runs.filter(run => 
+              run.status === 'waiting' &&
+              run.head_sha === pr.head.sha
+            );
+            
+            console.log(`Found ${pendingRuns.length} pending workflow runs`);
+            
+            for (const run of pendingRuns) {
+              console.log(`Approving workflow run ${run.id}: ${run.name}`);
+              
+              try {
+                // Approve the workflow run
+                await github.rest.actions.approveWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id
+                });
+                
+                console.log(`✅ Approved workflow run ${run.id}`);
+              } catch (error) {
+                console.log(`❌ Failed to approve workflow run ${run.id}: ${error.message}`);
+                // Continue with other runs even if one fails
+              }
+            }
+            
+            if (pendingRuns.length === 0) {
+              console.log('No pending workflow runs found');
+            }

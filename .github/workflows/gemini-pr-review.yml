@@ -1,7 +1,7 @@
 name: Gemini PR Review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize]
 
 permissions:
@@ -25,14 +25,6 @@ jobs:
       REVIEWER_URL: ${{ secrets.REVIEWER_URL || '' }}
       REVIEWER_KEY: ${{ secrets.REVIEWER_KEY || '' }}
     steps:
-      - name: Checkout PR head (explicit)
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
       - name: Get PR details
         id: pr_details
         run: |
@@ -42,54 +34,28 @@ jobs:
           echo "PR_BASE_REF=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
           echo "REPO=${{ github.repository }}" >> $GITHUB_OUTPUT
 
-      - name: Fetch base and PR refs (robust)
-        run: |
-          set -euo pipefail
-          PR_NUM=${{ github.event.pull_request.number }}
-          BASE_REF=${{ github.event.pull_request.base.ref }}
-          BASE_SHA=${{ github.event.pull_request.base.sha }}
-          HEAD_SHA=${{ github.event.pull_request.head.sha }}
-
-          echo "Fetching origin/${BASE_REF}..."
-          git fetch --no-tags --prune --depth=0 origin "${BASE_REF}" || true
-
-          echo "Fetching refs/pull/${PR_NUM}/head as a fallback..."
-          git fetch --no-tags --prune --depth=0 origin "refs/pull/${PR_NUM}/head:refs/remotes/pull/${PR_NUM}/head" || true
-
-          for SHA in "${BASE_SHA}" "${HEAD_SHA}"; do
-            if git cat-file -e "${SHA}"^{commit} 2>/dev/null; then
-              echo "Found commit ${SHA}"
-            else
-              echo "Commit ${SHA} not found locally; attempting to fetch by SHA..."
-              git fetch --depth=0 origin "${SHA}" || echo "Couldn't fetch ${SHA} directly; continuing"
-            fi
-          done
-
-      - name: Generate diff (robust)
+      - name: Generate diff via GitHub API
         id: generate_diff
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          BASE_SHA=${{ github.event.pull_request.base.sha }}
-          HEAD_SHA=${{ github.event.pull_request.head.sha }}
-
-          if ! git cat-file -e "${BASE_SHA}"^{commit} 2>/dev/null; then
-            echo "Error: base commit ${BASE_SHA} does not exist locally."
-            git show-ref || true
-            exit 1
-          fi
-
-          if ! git cat-file -e "${HEAD_SHA}"^{commit} 2>/dev/null; then
-            echo "Error: head commit ${HEAD_SHA} does not exist locally."
-            git show-ref || true
-            exit 1
-          fi
-
-          git diff "${BASE_SHA}" "${HEAD_SHA}" > pr_diff.diff
+          
+          # Fetch the PR diff via GitHub API to avoid checking out untrusted code
+          curl -L \
+            -H "Accept: application/vnd.github.v3.diff" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}" \
+            > pr_diff.diff
+          
           echo "DIFF_FILE=pr_diff.diff" >> $GITHUB_OUTPUT
           echo "Diff size (lines): $(wc -l < pr_diff.diff || true)"
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
@@ -130,14 +96,11 @@ jobs:
             diff_text = f.read()
 
           # Build prompt instructing the LLM to return strict JSON:
-          prompt = f"""
-You are an automated code reviewer. Analyze the provided git diff and return a single-line JSON object with two fields:
-  - decision: one of "approve", "request_changes", "comment", "merge"
-  - comment: a concise human-readable review text to include in the GitHub review.The JSON must be the only content in the response and must parse as JSON.
-
-Diff:
-{diff_text}
-"""
+          prompt = "You are an automated code reviewer. Analyze the provided git diff and return a single-line JSON object with two fields:\n"
+          prompt += '  - decision: one of "approve", "request_changes", "comment", "merge"\n'
+          prompt += "  - comment: a concise human-readable review text to include in the GitHub review."
+          prompt += "The JSON must be the only content in the response and must parse as JSON.\n\n"
+          prompt += "Diff:\n" + diff_text
 
           def call_external_reviewer():
             # If a REVIEWER_URL is provided, call it as simple HTTP POST with API key header REVIEWER_KEY
@@ -197,22 +160,22 @@ Diff:
 
             # No external reviewer available => use local heuristic stub
             decision = "comment"
-            comment = "Automated stub review: no GEMINI_API_KEY or REVIEWER_URL configured. Add GEMINI_API_KEY secret to enable LLM reviews."
+            comment = "@copilot Automated stub review: no GEMINI_API_KEY or REVIEWER_URL configured. Add GEMINI_API_KEY secret to enable LLM reviews."
             if "TODO" in diff_text or "FIXME" in diff_text:
               decision = "request_changes"
-              comment = "Found TODO/FIXME markers — please address before merging."
+              comment = "@copilot Found TODO/FIXME markers — please address before merging."
             elif len(diff_text.splitlines()) < 60:
               decision = "approve"
-              comment = "Small change appears fine."
+              comment = "@copilot Small change appears fine."
             elif len(diff_text.splitlines()) > 2000:
               decision = "comment"
-              comment = "Large change — consider splitting and add tests."
+              comment = "@copilot Large change — consider splitting and add tests."
             return json.dumps({"decision": decision, "comment": comment})
 
           # If override provided, use it and create a basic comment
           if decision_override:
             decision = decision_override
-            comment = f"Decision forced by REVIEW_DECISION secret: {decision_override}"
+            comment = f"@copilot Decision forced by REVIEW_DECISION secret: {decision_override}"
             llm_response = json.dumps({"decision": decision, "comment": comment})
           else:
             try:
@@ -234,7 +197,7 @@ Diff:
               print("Error calling reviewer:", e, file=sys.stderr)
               # fallback stub
               decision = "comment"
-              comment = f"Reviewer error: {e}. Falling back to safe comment."
+              comment = f"@copilot Reviewer error: {e}. Falling back to safe comment."
               llm_response = json.dumps({"decision":decision,"comment":comment})
 
           print("LLM decision:", decision)
@@ -288,7 +251,7 @@ Diff:
               create_review("COMMENT", comment)
             elif decision == "merge":
               # Approve first, then try merge if AUTO_MERGE is set
-              create_review("APPROVE", "Auto-approving prior to merge: " + comment)
+              create_review("APPROVE", "@copilot Auto-approving prior to merge: " + comment)
               if auto_merge:
                 # Ensure HEAD_SHA is provided
                 if not os.environ.get('HEAD_SHA'):
@@ -303,13 +266,16 @@ Diff:
                 print("AUTO_MERGE not enabled; skipping automatic merge.")
             else:
               # Unknown -> post comment
-              create_review("COMMENT", f"Unrecognized decision '{decision}'. LLM said: {comment}")
+              create_review("COMMENT", f"@copilot Unrecognized decision '{decision}'. LLM said: {comment}")
           except requests.HTTPError as e:
             print("HTTP error during GitHub API interaction:", e, file=sys.stderr)
             sys.exit(1)
 
           # Emit LLM result to workflow log
-          print("::set-output name=review_result::" + json.dumps({"decision": decision, "comment": comment}))
+          github_output = os.environ.get('GITHUB_OUTPUT', '')
+          if github_output:
+            with open(github_output, 'a') as f:
+              f.write(f"review_result={json.dumps({'decision': decision, 'comment': comment})}\n")
           PY
 
       - name: Done

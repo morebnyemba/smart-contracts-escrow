@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Smart Contracts Escrow Platform",
-  description: "Button-driven escrow platform with milestone-based payments",
+  description: "Secure escrow platform for buyers and sellers",
 };
 
 export default function RootLayout({

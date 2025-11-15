@@ -1,77 +1,68 @@
-from rest_framework import status, generics, permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import viewsets, filters
+from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import get_user_model
+from django.db.models import Q
 from .models import SellerProfile, ServiceCategory
-from .serializers import (
-    UserRegistrationSerializer,
-    UserSerializer,
-    SellerProfileSerializer,
-    ServiceCategorySerializer
-)
-
-User = get_user_model()
+from .serializers import SellerProfileSerializer, ServiceCategorySerializer
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def register(request):
-    """Register a new user"""
-    serializer = UserRegistrationSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.save()
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
-        }, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def current_user(request):
-    """Get current authenticated user"""
-    serializer = UserSerializer(request.user)
-    return Response(serializer.data)
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def service_categories(request):
-    """List all service categories"""
-    categories = ServiceCategory.objects.all()
-    serializer = ServiceCategorySerializer(categories, many=True)
-    return Response(serializer.data)
-
-
-class SellerProfileView(generics.RetrieveUpdateAPIView):
-    """Get or update seller profile"""
+class SellerProfileViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for viewing seller profiles.
+    Supports filtering by verification status and specific skills (using the `?skills=` parameter with comma-separated skill IDs or slugs), and searching by username, company name, or skill names (using the `?search=` parameter).
+    """
+    queryset = SellerProfile.objects.select_related('user').prefetch_related('skills').order_by('-id')
     serializer_class = SellerProfileSerializer
-    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__username', 'company_name', 'skills__name']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filter by verification status
+        verification_status = self.request.query_params.get('verification_status', None)
+        if verification_status:
+            queryset = queryset.filter(verification_status=verification_status)
+        
+        # Filter by skills (comma-separated skill IDs or slugs)
+        skills = self.request.query_params.get('skills', None)
+        if skills:
+            skill_list = [s.strip() for s in skills.split(',')]
+            # Check if they are numeric IDs or slugs
+            skill_ids = [int(s) for s in skill_list if s.isdigit()]
+            skill_slugs = [s for s in skill_list if not s.isdigit()]
+            
+            q_filter = Q()
+            if skill_ids:
+                q_filter |= Q(skills__id__in=skill_ids)
+            if skill_slugs:
+                q_filter |= Q(skills__slug__in=skill_slugs)
+            
+            if q_filter:
+                queryset = queryset.filter(q_filter).distinct()
+        
+        return queryset
+    
+    @action(detail=False, methods=['get'])
+    def verified(self, request):
+        """Get only verified sellers"""
+        verified_sellers = self.get_queryset().filter(
+            verification_status=SellerProfile.VerificationStatus.VERIFIED
+        )
+        page = self.paginate_queryset(verified_sellers)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(verified_sellers, many=True)
+        return Response(serializer.data)
 
-    def get_object(self):
-        return SellerProfile.objects.get(user=self.request.user)
 
-    def get(self, request, *args, **kwargs):
-        try:
-            return super().get(request, *args, **kwargs)
-        except SellerProfile.DoesNotExist:
-            return Response(
-                {'detail': 'Seller profile not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+class ServiceCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for viewing service categories.
+    """
+    queryset = ServiceCategory.objects.order_by('name')
+    serializer_class = ServiceCategorySerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'slug']
 
-
-class SellerProfileCreateView(generics.CreateAPIView):
-    """Create a new seller profile"""
-    serializer_class = SellerProfileSerializer
-    permission_classes = [IsAuthenticated]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
