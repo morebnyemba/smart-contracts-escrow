@@ -6,6 +6,7 @@ on:
       - 'frontend/**'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-ci.yml'
