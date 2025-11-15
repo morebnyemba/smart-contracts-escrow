@@ -219,3 +219,16 @@ class UserRegistrationAPITestCase(APITestCase):
         
         # Should succeed without authentication
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+    
+    def test_register_user_weak_password(self):
+        """Test registration fails with weak password."""
+        url = reverse('register')
+        data = {
+            'username': 'weakpassuser',
+            'email': 'weak@example.com',
+            'password': '123'
+        }
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)

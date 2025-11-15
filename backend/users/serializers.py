@@ -35,6 +35,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ['username', 'email', 'password']
     
+    def validate_password(self, value):
+        """Validate password using Django's password validators."""
+        from django.contrib.auth.password_validation import validate_password
+        validate_password(value)
+        return value
+    
     def create(self, validated_data):
         # Create user with hashed password
         user = CustomUser.objects.create_user(
