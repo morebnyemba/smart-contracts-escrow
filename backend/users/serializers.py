@@ -15,11 +15,13 @@ class SellerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = SellerProfile
         fields = [
+            'id',
             'public_seller_id',
             'username',
+            'email',
             'account_type',
             'company_name',
             'verification_status',
             'skills',
         ]
-        read_only_fields = ['public_seller_id', 'username']
+        read_only_fields = ['public_seller_id', 'verification_status']

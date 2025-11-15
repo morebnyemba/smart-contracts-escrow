@@ -1,6 +1,11 @@
-from django.urls import path
-from .views import SellerProfileLookupView
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import SellerProfileViewSet, ServiceCategoryViewSet
+
+router = DefaultRouter()
+router.register(r'sellers', SellerProfileViewSet, basename='seller')
+router.register(r'categories', ServiceCategoryViewSet, basename='category')
 
 urlpatterns = [
-    path('sellers/<uuid:public_seller_id>/', SellerProfileLookupView.as_view(), name='seller-lookup'),
+    path('', include(router.urls)),
 ]
