@@ -38,43 +38,65 @@ class SellerProfileAdmin(admin.ModelAdmin):
     def approve_sellers(self, request, queryset):
         """Approve selected seller profiles and send notifications."""
         count = 0
+        failed_notifications = 0
         for seller_profile in queryset:
             seller_profile.verification_status = SellerProfile.VerificationStatus.VERIFIED
             seller_profile.verified_at = timezone.now()
             seller_profile.save()
             
             # Send notification to the seller
-            send_verification_notification.delay(
-                user_id=seller_profile.user.id,
-                verification_status='VERIFIED'
-            )
+            try:
+                send_verification_notification.delay(
+                    user_id=seller_profile.user.id,
+                    verification_status='VERIFIED'
+                )
+            except Exception as e:
+                failed_notifications += 1
             count += 1
         
-        self.message_user(
-            request,
-            f'{count} seller profile(s) have been approved and notifications sent.'
-        )
+        if failed_notifications > 0:
+            self.message_user(
+                request,
+                f'{count} seller profile(s) have been approved, but {failed_notifications} notification(s) failed to send.',
+                level='warning'
+            )
+        else:
+            self.message_user(
+                request,
+                f'{count} seller profile(s) have been approved and notifications sent.'
+            )
     
     @admin.action(description='Reject selected sellers')
     def reject_sellers(self, request, queryset):
         """Reject selected seller profiles and send notifications."""
         count = 0
+        failed_notifications = 0
         for seller_profile in queryset:
             seller_profile.verification_status = SellerProfile.VerificationStatus.REJECTED
             seller_profile.verified_at = None
             seller_profile.save()
             
             # Send notification to the seller
-            send_verification_notification.delay(
-                user_id=seller_profile.user.id,
-                verification_status='REJECTED'
-            )
+            try:
+                send_verification_notification.delay(
+                    user_id=seller_profile.user.id,
+                    verification_status='REJECTED'
+                )
+            except Exception as e:
+                failed_notifications += 1
             count += 1
         
-        self.message_user(
-            request,
-            f'{count} seller profile(s) have been rejected and notifications sent.'
-        )
+        if failed_notifications > 0:
+            self.message_user(
+                request,
+                f'{count} seller profile(s) have been rejected, but {failed_notifications} notification(s) failed to send.',
+                level='warning'
+            )
+        else:
+            self.message_user(
+                request,
+                f'{count} seller profile(s) have been rejected and notifications sent.'
+            )
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):

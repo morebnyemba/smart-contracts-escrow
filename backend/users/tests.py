@@ -1,10 +1,14 @@
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from django.contrib.admin.sites import AdminSite
+from django.contrib.messages.storage.fallback import FallbackStorage
+from unittest.mock import patch
 from .models import CustomUser, SellerProfile, ServiceCategory
+from .admin import SellerProfileAdmin
 from wallets.models import UserWallet
 import uuid
 
@@ -283,10 +287,6 @@ class SellerProfileAdminActionsTestCase(TestCase):
     
     def setUp(self):
         """Set up test data for admin action tests."""
-        from django.contrib.admin.sites import AdminSite
-        from users.admin import SellerProfileAdmin
-        from unittest.mock import patch
-        
         # Create admin user
         self.admin_user = CustomUser.objects.create_superuser(
             username='admin',
@@ -323,9 +323,6 @@ class SellerProfileAdminActionsTestCase(TestCase):
         self.admin = SellerProfileAdmin(SellerProfile, self.site)
         
         # Create a mock request
-        from django.test import RequestFactory
-        from django.contrib.messages.storage.fallback import FallbackStorage
-        
         self.factory = RequestFactory()
         self.request = self.factory.get('/admin/')
         self.request.user = self.admin_user
