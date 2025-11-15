@@ -24,22 +24,28 @@ export default function Home() {
               </div>
             </div>
             <div className="hidden md:flex items-center space-x-8">
-              <Link href="/" className="text-white hover:text-[#00ff00] transition-colors">
+              <Link href="/" className="text-white hover:text-[#00ff00] transition-colors font-medium">
                 Home
               </Link>
-              <Link href="#about" className="text-white hover:text-[#00ff00] transition-colors">
+              <Link href="#about" className="text-white hover:text-[#00ff00] transition-colors font-medium flex items-center gap-1">
                 About
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </Link>
-              <Link href="#service-providers" className="text-white hover:text-[#00ff00] transition-colors">
+              <Link href="#service-providers" className="text-white hover:text-[#00ff00] transition-colors font-medium">
                 Service Providers
               </Link>
-              <Link href="#faq" className="text-white hover:text-[#00ff00] transition-colors">
+              <Link href="#faq" className="text-white hover:text-[#00ff00] transition-colors font-medium flex items-center gap-1">
                 FAQ
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </Link>
-              <Link href="/contact" className="text-white hover:text-[#00ff00] transition-colors">
+              <Link href="/contact" className="text-white hover:text-[#00ff00] transition-colors font-medium">
                 Contact Us
               </Link>
-              <Link href="/dashboard/buyer" className="bg-[#00ff00] text-black hover:bg-[#00dd00] px-6 py-2.5 rounded font-semibold transition-all">
+              <Link href="/dashboard/buyer" className="bg-[#00ff00] text-black hover:bg-[#00dd00] px-6 py-2.5 rounded font-bold transition-all">
                 Client Area
               </Link>
             </div>
