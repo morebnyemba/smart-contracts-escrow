@@ -1,9 +1,14 @@
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
+from django.contrib.admin.sites import AdminSite
+from django.contrib.messages.storage.fallback import FallbackStorage
+from unittest.mock import patch
 from .models import CustomUser, SellerProfile, ServiceCategory
+from .admin import SellerProfileAdmin
 from wallets.models import UserWallet
 import uuid
 
@@ -275,3 +280,160 @@ class SellerOnboardingAPITestCase(APITestCase):
         # Verify in database
         seller_profile.refresh_from_db()
         self.assertEqual(seller_profile.verification_status, SellerProfile.VerificationStatus.PENDING)
+
+
+@patch('users.admin.send_verification_notification.delay')
+class SellerProfileAdminActionsTestCase(TestCase):
+    """Test admin actions for approving/rejecting seller profiles."""
+    
+    def setUp(self):
+        """Set up test data for admin action tests."""
+        # Create admin user
+        self.admin_user = CustomUser.objects.create_superuser(
+            username='admin',
+            email='admin@example.com',
+            password='adminpassword123'
+        )
+        
+        # Create regular users with seller profiles
+        self.user1 = CustomUser.objects.create_user(
+            username='seller1',
+            email='seller1@example.com',
+            password='testpass123'
+        )
+        self.seller_profile1 = SellerProfile.objects.create(
+            user=self.user1,
+            account_type=SellerProfile.AccountType.INDIVIDUAL,
+            verification_status=SellerProfile.VerificationStatus.PENDING
+        )
+        
+        self.user2 = CustomUser.objects.create_user(
+            username='seller2',
+            email='seller2@example.com',
+            password='testpass123'
+        )
+        self.seller_profile2 = SellerProfile.objects.create(
+            user=self.user2,
+            account_type=SellerProfile.AccountType.COMPANY,
+            company_name='Test Company',
+            verification_status=SellerProfile.VerificationStatus.PENDING
+        )
+        
+        # Set up admin
+        self.site = AdminSite()
+        self.admin = SellerProfileAdmin(SellerProfile, self.site)
+        
+        # Create a mock request
+        self.factory = RequestFactory()
+        self.request = self.factory.get('/admin/')
+        self.request.user = self.admin_user
+        
+        # Add session and messages support
+        self.request.session = {}
+        self.request._messages = FallbackStorage(self.request)
+    
+    def test_approve_sellers_action(self, mock_notification):
+        """Test approving sellers updates status and sends notification."""
+        # Create queryset of pending sellers
+        queryset = SellerProfile.objects.filter(
+            verification_status=SellerProfile.VerificationStatus.PENDING
+        )
+        
+        # Execute the approve action
+        self.admin.approve_sellers(self.request, queryset)
+        
+        # Verify seller profiles were approved
+        self.seller_profile1.refresh_from_db()
+        self.seller_profile2.refresh_from_db()
+        
+        self.assertEqual(
+            self.seller_profile1.verification_status,
+            SellerProfile.VerificationStatus.VERIFIED
+        )
+        self.assertEqual(
+            self.seller_profile2.verification_status,
+            SellerProfile.VerificationStatus.VERIFIED
+        )
+        
+        # Verify verified_at timestamp was set
+        self.assertIsNotNone(self.seller_profile1.verified_at)
+        self.assertIsNotNone(self.seller_profile2.verified_at)
+        
+        # Verify notification task was called for both sellers
+        self.assertEqual(mock_notification.call_count, 2)
+    
+    def test_reject_sellers_action(self, mock_notification):
+        """Test rejecting sellers updates status and sends notification."""
+        # Create queryset of pending sellers
+        queryset = SellerProfile.objects.filter(
+            verification_status=SellerProfile.VerificationStatus.PENDING
+        )
+        
+        # Execute the reject action
+        self.admin.reject_sellers(self.request, queryset)
+        
+        # Verify seller profiles were rejected
+        self.seller_profile1.refresh_from_db()
+        self.seller_profile2.refresh_from_db()
+        
+        self.assertEqual(
+            self.seller_profile1.verification_status,
+            SellerProfile.VerificationStatus.REJECTED
+        )
+        self.assertEqual(
+            self.seller_profile2.verification_status,
+            SellerProfile.VerificationStatus.REJECTED
+        )
+        
+        # Verify verified_at timestamp was cleared
+        self.assertIsNone(self.seller_profile1.verified_at)
+        self.assertIsNone(self.seller_profile2.verified_at)
+        
+        # Verify notification task was called for both sellers
+        self.assertEqual(mock_notification.call_count, 2)
+    
+    def test_approve_single_seller(self, mock_notification):
+        """Test approving a single seller."""
+        queryset = SellerProfile.objects.filter(id=self.seller_profile1.id)
+        
+        # Execute the approve action
+        self.admin.approve_sellers(self.request, queryset)
+        
+        # Verify only the selected profile was approved
+        self.seller_profile1.refresh_from_db()
+        self.seller_profile2.refresh_from_db()
+        
+        self.assertEqual(
+            self.seller_profile1.verification_status,
+            SellerProfile.VerificationStatus.VERIFIED
+        )
+        self.assertEqual(
+            self.seller_profile2.verification_status,
+            SellerProfile.VerificationStatus.PENDING
+        )
+        
+        # Verify notification task was called only once
+        self.assertEqual(mock_notification.call_count, 1)
+    
+    def test_reject_already_verified_seller(self, mock_notification):
+        """Test that rejecting works on already verified sellers."""
+        # First approve a seller
+        self.seller_profile1.verification_status = SellerProfile.VerificationStatus.VERIFIED
+        self.seller_profile1.verified_at = timezone.now()
+        self.seller_profile1.save()
+        
+        queryset = SellerProfile.objects.filter(id=self.seller_profile1.id)
+        
+        # Now reject it
+        self.admin.reject_sellers(self.request, queryset)
+        
+        # Verify it was rejected
+        self.seller_profile1.refresh_from_db()
+        self.assertEqual(
+            self.seller_profile1.verification_status,
+            SellerProfile.VerificationStatus.REJECTED
+        )
+        self.assertIsNone(self.seller_profile1.verified_at)
+        
+        # Verify notification task was called
+        self.assertEqual(mock_notification.call_count, 1)
