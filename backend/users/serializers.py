@@ -25,3 +25,61 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             'skills',
         ]
         read_only_fields = ['public_seller_id', 'verification_status']
+
+
+class SellerOnboardingSerializer(serializers.ModelSerializer):
+    """Serializer for seller onboarding - create and update seller profile"""
+    skill_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        help_text="List of skill category IDs"
+    )
+    skills = ServiceCategorySerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = SellerProfile
+        fields = [
+            'id',
+            'public_seller_id',
+            'account_type',
+            'company_name',
+            'bio',
+            'profile_picture',
+            'verification_document',
+            'verification_status',
+            'skill_ids',
+            'skills',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'public_seller_id', 'verification_status', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        skill_ids = validated_data.pop('skill_ids', [])
+        # Set verification_status to PENDING if verification_document is provided
+        if 'verification_document' in validated_data and validated_data['verification_document']:
+            validated_data['verification_status'] = SellerProfile.VerificationStatus.PENDING
+        
+        seller_profile = SellerProfile.objects.create(**validated_data)
+        
+        if skill_ids:
+            seller_profile.skills.set(skill_ids)
+        
+        return seller_profile
+    
+    def update(self, instance, validated_data):
+        skill_ids = validated_data.pop('skill_ids', None)
+        
+        # If verification_document is being updated, set status to PENDING
+        if 'verification_document' in validated_data and validated_data['verification_document']:
+            validated_data['verification_status'] = SellerProfile.VerificationStatus.PENDING
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        if skill_ids is not None:
+            instance.skills.set(skill_ids)
+        
+        return instance
