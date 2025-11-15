@@ -282,6 +282,7 @@ class SellerOnboardingAPITestCase(APITestCase):
         self.assertEqual(seller_profile.verification_status, SellerProfile.VerificationStatus.PENDING)
 
 
+@patch('users.admin.send_verification_notification.delay')
 class SellerProfileAdminActionsTestCase(TestCase):
     """Test admin actions for approving/rejecting seller profiles."""
     
@@ -330,16 +331,8 @@ class SellerProfileAdminActionsTestCase(TestCase):
         # Add session and messages support
         self.request.session = {}
         self.request._messages = FallbackStorage(self.request)
-        
-        # Mock the Celery task to avoid Redis dependency in tests
-        self.patcher = patch('users.admin.send_verification_notification.delay')
-        self.mock_notification = self.patcher.start()
     
-    def tearDown(self):
-        """Clean up patches."""
-        self.patcher.stop()
-    
-    def test_approve_sellers_action(self):
+    def test_approve_sellers_action(self, mock_notification):
         """Test approving sellers updates status and sends notification."""
         # Create queryset of pending sellers
         queryset = SellerProfile.objects.filter(
@@ -367,9 +360,9 @@ class SellerProfileAdminActionsTestCase(TestCase):
         self.assertIsNotNone(self.seller_profile2.verified_at)
         
         # Verify notification task was called for both sellers
-        self.assertEqual(self.mock_notification.call_count, 2)
+        self.assertEqual(mock_notification.call_count, 2)
     
-    def test_reject_sellers_action(self):
+    def test_reject_sellers_action(self, mock_notification):
         """Test rejecting sellers updates status and sends notification."""
         # Create queryset of pending sellers
         queryset = SellerProfile.objects.filter(
@@ -397,9 +390,9 @@ class SellerProfileAdminActionsTestCase(TestCase):
         self.assertIsNone(self.seller_profile2.verified_at)
         
         # Verify notification task was called for both sellers
-        self.assertEqual(self.mock_notification.call_count, 2)
+        self.assertEqual(mock_notification.call_count, 2)
     
-    def test_approve_single_seller(self):
+    def test_approve_single_seller(self, mock_notification):
         """Test approving a single seller."""
         queryset = SellerProfile.objects.filter(id=self.seller_profile1.id)
         
@@ -420,9 +413,9 @@ class SellerProfileAdminActionsTestCase(TestCase):
         )
         
         # Verify notification task was called only once
-        self.assertEqual(self.mock_notification.call_count, 1)
+        self.assertEqual(mock_notification.call_count, 1)
     
-    def test_reject_already_verified_seller(self):
+    def test_reject_already_verified_seller(self, mock_notification):
         """Test that rejecting works on already verified sellers."""
         # First approve a seller
         self.seller_profile1.verification_status = SellerProfile.VerificationStatus.VERIFIED
@@ -443,4 +436,4 @@ class SellerProfileAdminActionsTestCase(TestCase):
         self.assertIsNone(self.seller_profile1.verified_at)
         
         # Verify notification task was called
-        self.assertEqual(self.mock_notification.call_count, 1)
+        self.assertEqual(mock_notification.call_count, 1)
