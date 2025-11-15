@@ -160,22 +160,22 @@ jobs:
 
             # No external reviewer available => use local heuristic stub
             decision = "comment"
-            comment = "Automated stub review: no GEMINI_API_KEY or REVIEWER_URL configured. Add GEMINI_API_KEY secret to enable LLM reviews."
+            comment = "@copilot Automated stub review: no GEMINI_API_KEY or REVIEWER_URL configured. Add GEMINI_API_KEY secret to enable LLM reviews."
             if "TODO" in diff_text or "FIXME" in diff_text:
               decision = "request_changes"
-              comment = "Found TODO/FIXME markers — please address before merging."
+              comment = "@copilot Found TODO/FIXME markers — please address before merging."
             elif len(diff_text.splitlines()) < 60:
               decision = "approve"
-              comment = "Small change appears fine."
+              comment = "@copilot Small change appears fine."
             elif len(diff_text.splitlines()) > 2000:
               decision = "comment"
-              comment = "Large change — consider splitting and add tests."
+              comment = "@copilot Large change — consider splitting and add tests."
             return json.dumps({"decision": decision, "comment": comment})
 
           # If override provided, use it and create a basic comment
           if decision_override:
             decision = decision_override
-            comment = f"Decision forced by REVIEW_DECISION secret: {decision_override}"
+            comment = f"@copilot Decision forced by REVIEW_DECISION secret: {decision_override}"
             llm_response = json.dumps({"decision": decision, "comment": comment})
           else:
             try:
@@ -197,7 +197,7 @@ jobs:
               print("Error calling reviewer:", e, file=sys.stderr)
               # fallback stub
               decision = "comment"
-              comment = f"Reviewer error: {e}. Falling back to safe comment."
+              comment = f"@copilot Reviewer error: {e}. Falling back to safe comment."
               llm_response = json.dumps({"decision":decision,"comment":comment})
 
           print("LLM decision:", decision)
@@ -251,7 +251,7 @@ jobs:
               create_review("COMMENT", comment)
             elif decision == "merge":
               # Approve first, then try merge if AUTO_MERGE is set
-              create_review("APPROVE", "Auto-approving prior to merge: " + comment)
+              create_review("APPROVE", "@copilot Auto-approving prior to merge: " + comment)
               if auto_merge:
                 # Ensure HEAD_SHA is provided
                 if not os.environ.get('HEAD_SHA'):
@@ -266,7 +266,7 @@ jobs:
                 print("AUTO_MERGE not enabled; skipping automatic merge.")
             else:
               # Unknown -> post comment
-              create_review("COMMENT", f"Unrecognized decision '{decision}'. LLM said: {comment}")
+              create_review("COMMENT", f"@copilot Unrecognized decision '{decision}'. LLM said: {comment}")
           except requests.HTTPError as e:
             print("HTTP error during GitHub API interaction:", e, file=sys.stderr)
             sys.exit(1)
