@@ -117,7 +117,7 @@ jobs:
                 }
                 
                 let commentBody = '## 🤖 PR Status Check\n\n';
-                commentBody += 'This PR requires attention:\n\n';
+                commentBody += '@copilot This PR requires attention:\n\n';
                 commentBody += needsAttentionReasons.map(r => `- ${r}`).join('\n') + '\n\n';
                 commentBody += '### Current Status\n';
                 commentBody += `- **Age** ${prAge} days old\n`;

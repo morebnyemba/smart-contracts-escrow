@@ -82,7 +82,7 @@ jobs:
             
             const summary = `## Auto-merge Evaluation Summary
             
-            **Criteria Status:** ${criteriaMet ? '✅ PASS' : '❌ FAIL'}
+            @copilot **Criteria Status:** ${criteriaMet ? '✅ PASS' : '❌ FAIL'}
             
             ### Approval Status
             - Unique Approvals: ${approvalCount} (≥1 required) ${approvalCount >= 1 ? '✅' : '❌'}
@@ -168,7 +168,7 @@ jobs:
             
             const body = `## Auto-merge Criteria Not Met
 
-            This PR does not yet meet the criteria for auto-merge. Please address the following:
+            @copilot This PR does not yet meet the criteria for auto-merge. Please address the following:
 
             ${checklist.join('\n')}
 
