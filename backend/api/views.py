@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 import logging
 
 from transactions.models import EscrowTransaction, Milestone, Review
+from transactions.signals import milestone_approved, transaction_funded, revision_requested, work_submitted
 from wallets.models import UserWallet
 from .serializers import (
     EscrowTransactionSerializer,
@@ -207,6 +208,14 @@ class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
         milestone.status = Milestone.MilestoneStatus.AWAITING_REVIEW
         milestone.submission_details = submission_details
         milestone.save()
+        
+        # Send signal for work submitted
+        work_submitted.send(
+            sender=self.__class__,
+            milestone=milestone,
+            buyer=transaction_obj.buyer,
+            seller=transaction_obj.seller
+        )
         
         serializer = self.get_serializer(milestone)
         return Response(serializer.data, status=status.HTTP_200_OK)

@@ -8,12 +8,14 @@ from django.dispatch import receiver
 from transactions.signals import (
     milestone_approved,
     transaction_funded,
-    revision_requested
+    revision_requested,
+    work_submitted
 )
 from .tasks import (
     send_milestone_approved_notification,
     send_transaction_funded_notification,
-    send_revision_requested_notification
+    send_revision_requested_notification,
+    send_work_submitted_notification
 )
 
 
@@ -74,6 +76,27 @@ def handle_revision_requested(sender, milestone, buyer, seller, **kwargs):
     # Trigger notification task
     # In production with Celery configured, use .delay() for async execution
     send_revision_requested_notification(
+        milestone_id=milestone.id,
+        buyer_id=buyer.id,
+        seller_id=seller.id
+    )
+
+
+@receiver(work_submitted)
+def handle_work_submitted(sender, milestone, buyer, seller, **kwargs):
+    """
+    Handle the work_submitted signal.
+    
+    Args:
+        sender: The class that sent the signal
+        milestone: The Milestone instance for which work was submitted
+        buyer: The User instance who needs to review the work
+        seller: The User instance who submitted the work
+        **kwargs: Additional keyword arguments
+    """
+    # Trigger notification task
+    # In production with Celery configured, use .delay() for async execution
+    send_work_submitted_notification(
         milestone_id=milestone.id,
         buyer_id=buyer.id,
         seller_id=seller.id
