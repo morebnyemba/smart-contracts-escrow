@@ -171,6 +171,16 @@ export interface Transaction {
   milestones: TransactionMilestone[];
 }
 
+export interface CreateTransactionData {
+  title: string;
+  seller: number;
+  milestones: {
+    title: string;
+    description?: string;
+    value: string | number;
+  }[];
+}
+
 export const transactionAPI = {
   getAll: () =>
     fetchAPI<{ count: number; results: Transaction[] }>('/api/transactions/', {
@@ -180,6 +190,12 @@ export const transactionAPI = {
   getById: (id: string | number) =>
     fetchAPI<Transaction>(`/api/transactions/${id}/`, {
       method: 'GET',
+    }),
+
+  create: (data: CreateTransactionData) =>
+    fetchAPI<Transaction>('/api/transactions/', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 
   fund: (id: string | number) =>
