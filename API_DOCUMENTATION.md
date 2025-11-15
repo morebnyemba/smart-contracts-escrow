@@ -179,6 +179,35 @@ Get details of a specific transaction.
 }
 ```
 
+#### Accept Transaction
+
+Seller accepts the transaction terms, moving it from PENDING_FUNDING to AWAITING_PAYMENT status.
+
+**Endpoint:** `POST /api/transactions/{id}/accept/`
+
+**Authorization:** Only the seller can accept the transaction.
+
+**Preconditions:**
+- Transaction status must be `PENDING_FUNDING`
+
+**Response:** (200 OK)
+```json
+{
+  "id": 1,
+  "title": "Website Development Project",
+  "total_value": "800.00",
+  "status": "AWAITING_PAYMENT",
+  ...
+}
+```
+
+**Side Effects:**
+- Both buyer and seller are notified of the status change
+
+**Error Responses:**
+- `403 Forbidden`: User is not the seller
+- `400 Bad Request`: Invalid transaction status
+
 #### Fund Transaction
 
 Transfer funds from buyer's wallet to escrow.
@@ -344,10 +373,11 @@ Get the authenticated user's wallet information.
 ### Transaction Status Flow
 
 1. `PENDING_FUNDING` - Initial state after creation
-2. `IN_ESCROW` - After buyer funds the transaction
-3. `COMPLETED` - All milestones completed
-4. `DISPUTED` - Transaction disputed (future feature)
-5. `CLOSED` - Transaction closed (future feature)
+2. `AWAITING_PAYMENT` - After seller accepts the transaction
+3. `IN_ESCROW` - After buyer funds the transaction
+4. `COMPLETED` - All milestones completed
+5. `DISPUTED` - Transaction disputed (future feature)
+6. `CLOSED` - Transaction closed (future feature)
 
 ### Milestone Status Flow
 
@@ -384,24 +414,29 @@ Error responses include descriptive messages:
    POST /api/transactions/
    ```
 
-2. **Buyer funds transaction**
+2. **Seller accepts transaction**
+   ```
+   POST /api/transactions/1/accept/
+   ```
+
+3. **Buyer funds transaction**
    ```
    POST /api/transactions/1/fund/
    ```
 
-3. **Seller submits work**
+4. **Seller submits work**
    ```
    POST /api/milestones/1/submit/
    ```
 
-4. **Buyer approves milestone**
+5. **Buyer approves milestone**
    ```
    POST /api/milestones/1/approve/
    ```
 
-5. **Repeat steps 3-4 for all milestones**
+6. **Repeat steps 4-5 for all milestones**
 
-6. **Transaction automatically completes when all milestones are done**
+7. **Transaction automatically completes when all milestones are done**
 
 ## Testing
 

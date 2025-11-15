@@ -135,6 +135,60 @@ class TransactionAPITest(TestCase):
         
         response = self.client.post(f'/api/transactions/{transaction.id}/fund/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    
+    def test_accept_transaction(self):
+        """Test seller accepting a transaction"""
+        self.client.force_authenticate(user=self.seller)
+        
+        # Create a transaction in PENDING_FUNDING status
+        transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.PENDING_FUNDING
+        )
+        
+        response = self.client.post(f'/api/transactions/{transaction.id}/accept/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'AWAITING_PAYMENT')
+        
+        # Verify status changed in database
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, EscrowTransaction.TransactionStatus.AWAITING_PAYMENT)
+    
+    def test_only_seller_can_accept(self):
+        """Test that only the seller can accept a transaction"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.PENDING_FUNDING
+        )
+        
+        response = self.client.post(f'/api/transactions/{transaction.id}/accept/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Only the seller', response.data['error'])
+    
+    def test_accept_transaction_invalid_status(self):
+        """Test that transaction can only be accepted in PENDING_FUNDING status"""
+        self.client.force_authenticate(user=self.seller)
+        
+        # Create a transaction in IN_ESCROW status
+        transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.IN_ESCROW
+        )
+        
+        response = self.client.post(f'/api/transactions/{transaction.id}/accept/')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('cannot be accepted', response.data['error'])
 
 
 class MilestoneAPITest(TestCase):
