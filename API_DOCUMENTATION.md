@@ -16,6 +16,55 @@ All API endpoints require authentication. The API uses Django REST Framework's S
 
 ## API Endpoints
 
+### Seller Onboarding
+
+#### Create/Update Seller Profile
+
+Create or update a seller profile for the authenticated user.
+
+**Endpoint:** `POST /api/onboarding/seller/`
+
+**Authorization:** Requires authentication.
+
+**Request Body (multipart/form-data or JSON):**
+```json
+{
+  "account_type": "INDIVIDUAL",
+  "company_name": "Optional Company Name",
+  "bio": "Brief description of services and expertise",
+  "profile_picture": "<file>",
+  "verification_document": "<file>",
+  "skill_ids": [1, 2, 3]
+}
+```
+
+**Response:** (201 Created or 200 OK)
+```json
+{
+  "id": 1,
+  "public_seller_id": "068daef4-7f5d-40c1-b8cd-968b2ac5f4a9",
+  "account_type": "INDIVIDUAL",
+  "company_name": null,
+  "bio": "I am a Python and Django developer",
+  "profile_picture": null,
+  "verification_document": "/media/verification_docs/doc.pdf",
+  "verification_status": "PENDING",
+  "skills": [
+    {"name": "Python Development", "slug": "python-dev"},
+    {"name": "Django", "slug": "django"}
+  ],
+  "created_at": "2025-11-15T10:20:16Z",
+  "updated_at": "2025-11-15T10:20:16Z"
+}
+```
+
+**Notes:**
+- If a seller profile already exists for the user, it will be updated instead of creating a new one
+- When `verification_document` is submitted, `verification_status` is automatically set to `PENDING`
+- Admin users are notified via email when a profile is submitted for verification
+- `account_type` can be either `INDIVIDUAL` or `COMPANY`
+- `skill_ids` is an optional array of ServiceCategory IDs
+
 ### Transactions
 
 #### Create Transaction
