@@ -31,36 +31,6 @@ export function TransactionView({ transaction, milestones, isBuyer, isSeller }: 
 
     const progress = calculateProgress();
 
-interface User {
-  id: number;
-  username: string;
-}
-
-interface Transaction {
-  id: string;
-  title: string;
-  status: string;
-  total_value: number;
-  buyer: User;
-  seller: User;
-}
-
-interface Milestone {
-  id: number;
-  title: string;
-  value: number;
-  status: string;
-  transaction_id: string;
-}
-
-interface TransactionViewProps {
-  transaction: Transaction;
-  milestones: Milestone[];
-  isBuyer: boolean;
-  isSeller: boolean;
-}
-
-export function TransactionView({ transaction, milestones, isBuyer, isSeller }: TransactionViewProps) {
     return (
         <div className="max-w-5xl mx-auto p-6 space-y-6">
             {/* Header Section */}

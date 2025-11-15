@@ -1,18 +1,15 @@
 import { create } from 'zustand';
 import { User } from '@/lib/api';
 
-interface User {
-  id: number;
-  username: string;
-  is_seller?: boolean;
-}
-
 interface UserState {
   user: User | null;
-  token: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
   isSeller: boolean;
-  login: (token: string, user: User) => void;
+  login: (accessToken: string, refreshToken: string, user: User) => void;
   logout: () => void;
+  setUser: (user: User) => void;
+  updateToken: (accessToken: string) => void;
 }
 
 export const useUserStore = create<UserState>((set) => ({

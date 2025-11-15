@@ -1,33 +1,13 @@
 import { create } from 'zustand';
 import { Transaction, Milestone } from '@/types/transaction';
 
-interface User {
-  id: number;
-  username: string;
-}
-
-interface Transaction {
-  id: string;
-  title: string;
-  status: string;
-  total_value: number;
-  buyer: User;
-  seller: User;
-}
-
-interface Milestone {
-  id: number;
-  title: string;
-  value: number;
-  status: string;
-  transaction_id: string;
-}
+type MilestoneStatus = 'PENDING' | 'AWAITING_REVIEW' | 'APPROVED' | 'REVISION_REQUESTED' | 'DISPUTED';
 
 interface TransactionState {
   activeTransaction: Transaction | null;
   milestones: Milestone[];
   fetchTransaction: (tx_id: string) => Promise<void>;
-  updateMilestoneStatus: (milestone_id: number, status: string) => void;
+  updateMilestoneStatus: (milestone_id: number, status: MilestoneStatus) => void;
 }
 
 export const useTransactionStore = create<TransactionState>((set) => ({
@@ -51,7 +31,7 @@ export const useTransactionStore = create<TransactionState>((set) => ({
     ];
     set({ activeTransaction: dummyTransaction, milestones: dummyMilestones });
   },
-  updateMilestoneStatus: (milestone_id: number, status: string) => set((state) => ({
+  updateMilestoneStatus: (milestone_id: number, status: MilestoneStatus) => set((state) => ({
     milestones: state.milestones.map((m) =>
       m.id === milestone_id ? { ...m, status } : m
     ),

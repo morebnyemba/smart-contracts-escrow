@@ -1,16 +1,4 @@
-interface Milestone {
-  id: number;
-  title: string;
-  value: number;
-  status: string;
-  transaction_id: string;
-}
-
-interface MilestoneListProps {
-  milestones: Milestone[];
-  isBuyer: boolean;
-  isSeller: boolean;
-}
+import { MilestoneListProps } from '@/types/transaction';
 
 export function MilestoneList({ milestones, isBuyer, isSeller }: MilestoneListProps) {
     
@@ -22,8 +10,40 @@ export function MilestoneList({ milestones, isBuyer, isSeller }: MilestoneListPr
     };
 
     const handleSubmitWork = async (milestoneId: number) => {
-        // TODO: Implement submit work functionality
+        // Implementation will be added
         console.log('Submitting work for milestone:', milestoneId);
+    };
+
+    const handleRequestRevision = async (milestoneId: number) => {
+        console.log('Requesting revision for milestone:', milestoneId);
+    };
+
+    const handleOpenDispute = async (milestoneId: number) => {
+        console.log('Opening dispute for milestone:', milestoneId);
+    };
+
+    const getStatusBadgeColor = (status: string) => {
+        switch (status) {
+            case 'PENDING':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'AWAITING_REVIEW':
+                return 'bg-blue-100 text-blue-800';
+            case 'APPROVED':
+                return 'bg-green-100 text-green-800';
+            case 'REVISION_REQUESTED':
+                return 'bg-orange-100 text-orange-800';
+            case 'DISPUTED':
+                return 'bg-red-100 text-red-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    };
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+        }).format(amount);
     };
 
     if (milestones.length === 0) {
