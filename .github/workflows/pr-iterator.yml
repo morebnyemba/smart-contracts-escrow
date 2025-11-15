@@ -1,0 +1,232 @@
+name: PR Iterator - Review All Open PRs
+
+on:
+  schedule:
+    # Run every 15 minutes to check all open PRs
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+  issues: write
+
+jobs:
+  iterate-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Iterate through all open PRs
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Fetch all open pull requests
+            const { data: pullRequests } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            
+            console.log(`Found ${pullRequests.length} open pull requests`);
+            
+            for (const pr of pullRequests) {
+              console.log(`\n--- Processing PR #${pr.number}: ${pr.title} ---`);
+              
+              // Fetch reviews for this PR
+              const { data: reviews } = await github.rest.pulls.listReviews({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number
+              });
+              
+              // Calculate latest review state per user
+              const latestReviewByUser = {};
+              for (const review of reviews) {
+                const user = review.user.login;
+                if (!latestReviewByUser[user] || new Date(review.submitted_at) > new Date(latestReviewByUser[user].submitted_at)) {
+                  latestReviewByUser[user] = review;
+                }
+              }
+              
+              const approvers = [];
+              const changeRequesters = [];
+              for (const [user, review] of Object.entries(latestReviewByUser)) {
+                if (review.state === 'APPROVED') {
+                  approvers.push(user);
+                } else if (review.state === 'CHANGES_REQUESTED') {
+                  changeRequesters.push(user);
+                }
+              }
+              
+              // Fetch check runs
+              const { data: checkRuns } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: pr.head.sha
+              });
+              
+              const failingChecks = checkRuns.check_runs.filter(cr => 
+                cr.conclusion && cr.conclusion !== 'success' && cr.conclusion !== 'neutral' && cr.conclusion !== 'skipped'
+              );
+              
+              // Calculate PR age
+              const prAge = Math.floor((Date.now() - new Date(pr.created_at)) / (1000 * 60 * 60 * 24));
+              
+              // Check if PR is stale (older than 14 days with no activity)
+              const lastActivity = new Date(pr.updated_at);
+              const daysSinceActivity = Math.floor((Date.now() - lastActivity) / (1000 * 60 * 60 * 24));
+              const isStale = daysSinceActivity > 14;
+              
+              // Build status report
+              const statusEmoji = {
+                needsReview: approvers.length === 0 && changeRequesters.length === 0 ? '🔍' : '',
+                hasApproval: approvers.length > 0 ? '✅' : '',
+                hasChangeRequests: changeRequesters.length > 0 ? '🔄' : '',
+                hasFailing: failingChecks.length > 0 ? '❌' : '',
+                isStale: isStale ? '⏰' : ''
+              };
+              
+              const status = Object.values(statusEmoji).filter(e => e).join(' ') || '⏳';
+              
+              console.log(`PR #${pr.number} status: ${status}`);
+              console.log(`- Age: ${prAge} days, Last activity: ${daysSinceActivity} days ago`);
+              console.log(`- Approvals: ${approvers.length}, Change requests: ${changeRequesters.length}`);
+              console.log(`- Failing checks: ${failingChecks.length}`);
+              
+              // Post status comment if PR needs attention
+              if (isStale || (approvers.length === 0 && daysSinceActivity > 7)) {
+                const needsAttentionReasons = [];
+                
+                if (isStale) {
+                  needsAttentionReasons.push('⏰ This PR has been inactive for more than 14 days');
+                }
+                
+                if (approvers.length === 0 && daysSinceActivity > 7) {
+                  needsAttentionReasons.push('🔍 This PR has been waiting for review for over 7 days');
+                }
+                
+                if (changeRequesters.length > 0) {
+                  needsAttentionReasons.push(`🔄 Changes requested by: ${changeRequesters.join(', ')}`);
+                }
+                
+                if (failingChecks.length > 0) {
+                  needsAttentionReasons.push(`❌ Failing checks: ${failingChecks.map(c => c.name).join(', ')}`);
+                }
+                
+                let commentBody = '## 🤖 PR Status Check\n\n';
+                commentBody += '@copilot This PR requires attention:\n\n';
+                commentBody += needsAttentionReasons.map(r => `- ${r}`).join('\n') + '\n\n';
+                commentBody += '### Current Status\n';
+                commentBody += `- **Age** ${prAge} days old\n`;
+                commentBody += `- **Last activity** ${daysSinceActivity} days ago\n`;
+                commentBody += `- **Approvals** ${approvers.length}`;
+                if (approvers.length > 0) commentBody += ` (${approvers.join(', ')})`;
+                commentBody += '\n';
+                commentBody += `- **Change requests** ${changeRequesters.length}`;
+                if (changeRequesters.length > 0) commentBody += ` (${changeRequesters.join(', ')})`;
+                commentBody += '\n';
+                commentBody += `- **Failing checks** ${failingChecks.length}\n\n`;
+                commentBody += '### Recommended Actions\n';
+                if (approvers.length === 0) commentBody += '- [ ] Request review from maintainers\n';
+                if (changeRequesters.length > 0) commentBody += '- [ ] Address requested changes\n';
+                if (failingChecks.length > 0) commentBody += '- [ ] Fix failing CI checks\n';
+                if (isStale) commentBody += '- [ ] Rebase on latest main branch\n- [ ] Confirm this PR is still relevant\n';
+                commentBody += '\n---\n';
+                commentBody += '*This is an automated check running every 15 minutes. If this PR should be closed, please close it to prevent future notifications.*';
+
+                // Check if we've already posted a similar comment recently
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  per_page: 10
+                });
+                
+                const recentBotComment = comments.find(c => 
+                  c.user.type === 'Bot' && 
+                  c.body.includes('PR Status Check') &&
+                  (Date.now() - new Date(c.created_at)) < 5 * 24 * 60 * 60 * 1000 // Less than 5 days old
+                );
+                
+                if (!recentBotComment) {
+                  console.log(`Posting status comment on PR #${pr.number}`);
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    body: commentBody
+                  });
+                } else {
+                  console.log(`Recent bot comment exists, skipping new comment on PR #${pr.number}`);
+                }
+              }
+              
+              // Add labels based on status
+              const labelsToAdd = [];
+              const labelsToRemove = [];
+              
+              if (isStale) {
+                labelsToAdd.push('stale');
+              } else {
+                labelsToRemove.push('stale');
+              }
+              
+              if (approvers.length === 0 && changeRequesters.length === 0) {
+                labelsToAdd.push('needs-review');
+              } else {
+                labelsToRemove.push('needs-review');
+              }
+              
+              if (changeRequesters.length > 0) {
+                labelsToAdd.push('changes-requested');
+              } else {
+                labelsToRemove.push('changes-requested');
+              }
+              
+              // Fetch current labels
+              const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number
+              });
+              const currentLabelNames = currentLabels.map(l => l.name);
+              
+              // Add labels that don't exist
+              for (const label of labelsToAdd) {
+                if (!currentLabelNames.includes(label)) {
+                  try {
+                    await github.rest.issues.addLabels({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: pr.number,
+                      labels: [label]
+                    });
+                    console.log(`Added label '${label}' to PR #${pr.number}`);
+                  } catch (error) {
+                    console.log(`Could not add label '${label}': ${error.message}`);
+                  }
+                }
+              }
+              
+              // Remove labels that should not exist
+              for (const label of labelsToRemove) {
+                if (currentLabelNames.includes(label)) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: pr.number,
+                      name: label
+                    });
+                    console.log(`Removed label '${label}' from PR #${pr.number}`);
+                  } catch (error) {
+                    console.log(`Could not remove label '${label}': ${error.message}`);
+                  }
+                }
+              }
+            }
+            
+            console.log(`\n✅ Finished processing ${pullRequests.length} open pull requests`);
