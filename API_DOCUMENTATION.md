@@ -399,6 +399,38 @@ Buyer requests revision on submitted work.
 }
 ```
 
+#### Open Dispute
+
+Buyer opens a dispute on a milestone, triggering admin mediation.
+
+**Endpoint:** `POST /api/milestones/{id}/dispute/`
+
+**Authorization:** Only the buyer can open disputes.
+
+**Preconditions:**
+- Milestone status must NOT be `COMPLETED` or already `DISPUTED`
+
+**Response:** (200 OK)
+```json
+{
+  "id": 1,
+  "transaction": 1,
+  "title": "Design Phase",
+  "value": "300.00",
+  "status": "DISPUTED",
+  "submission_details": "Design mockups completed..."
+}
+```
+
+**Side Effects:**
+- Milestone status changes to `DISPUTED`
+- Parent transaction status changes to `DISPUTED`
+- Admin is notified for mediation
+
+**Error Responses:**
+- `403 Forbidden`: User is not the buyer
+- `400 Bad Request`: Milestone is already completed or disputed
+
 ### Wallets
 
 #### View Wallet
@@ -430,11 +462,10 @@ Get the authenticated user's wallet information.
 ### Transaction Status Flow
 
 1. `PENDING_FUNDING` - Initial state after creation
-2. `AWAITING_PAYMENT` - After seller accepts the transaction
-3. `IN_ESCROW` - After buyer funds the transaction
-4. `COMPLETED` - All milestones completed
-5. `DISPUTED` - Transaction disputed (future feature)
-6. `CLOSED` - Transaction closed (future feature)
+2. `IN_ESCROW` - After buyer funds the transaction
+3. `COMPLETED` - All milestones completed
+4. `DISPUTED` - Buyer opened a dispute, requires admin mediation
+5. `CLOSED` - Transaction closed (future feature)
 
 ### Milestone Status Flow
 
@@ -442,7 +473,7 @@ Get the authenticated user's wallet information.
 2. `AWAITING_REVIEW` - Seller submitted work
 3. `REVISION_REQUESTED` - Buyer requests changes
 4. `COMPLETED` - Buyer approved, payment released
-5. `DISPUTED` - Milestone disputed (future feature)
+5. `DISPUTED` - Buyer opened a dispute, requires admin mediation
 
 ## Error Handling
 
@@ -465,6 +496,8 @@ Error responses include descriptive messages:
 ```
 
 ## Example Usage Flow
+
+### Happy Path
 
 1. **Buyer creates transaction**
    ```
@@ -494,6 +527,22 @@ Error responses include descriptive messages:
 6. **Repeat steps 4-5 for all milestones**
 
 7. **Transaction automatically completes when all milestones are done**
+
+### Dispute Flow
+
+1. **Buyer creates and funds transaction** (steps 1-2 from happy path)
+
+2. **Seller submits work**
+   ```
+   POST /api/milestones/1/submit/
+   ```
+
+3. **Buyer opens dispute** (if not satisfied with work)
+   ```
+   POST /api/milestones/1/dispute/
+   ```
+
+4. **Admin is notified and begins mediation**
 
 ## Testing
 
