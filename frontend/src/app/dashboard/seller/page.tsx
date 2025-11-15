@@ -1,15 +1,122 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import styles from './page.module.css';
-import { mockStats, mockActiveTransactions, mockPendingWork } from './mockData';
-import { Transaction } from './types';
+import { transactionAPI } from '@/lib/api';
+import { Transaction as LocalTransaction } from './types';
+
+interface Stats {
+  activeTransactions: number;
+  pendingWork: number;
+  totalEarnings: number;
+  completedProjects: number;
+}
+
+interface WorkItem {
+  id: number;
+  title: string;
+  project: string;
+  dueDate: string;
+}
 
 export default function SellerPortal() {
-  const stats = mockStats;
-  const activeTransactions = mockActiveTransactions;
-  const pendingWork = mockPendingWork;
+  const [stats, setStats] = useState<Stats>({
+    activeTransactions: 0,
+    pendingWork: 0,
+    totalEarnings: 0,
+    completedProjects: 0,
+  });
+  const [activeTransactions, setActiveTransactions] = useState<LocalTransaction[]>([]);
+  const [pendingWork, setPendingWork] = useState<WorkItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
 
-  const getStatusBadgeClass = (status: Transaction['status']) => {
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const response = await transactionAPI.getAll();
+        
+        if (response.error) {
+          setError(response.error);
+          setLoading(false);
+          return;
+        }
+
+        if (response.data) {
+          const transactions = response.data.results;
+          
+          // Map transactions to local format
+          const mapped = transactions
+            .filter(tx => tx.status === 'IN_ESCROW' || tx.status === 'COMPLETED')
+            .map(tx => {
+              let status: LocalTransaction['status'] = 'pending';
+              let statusLabel = 'Pending';
+              
+              if (tx.status === 'COMPLETED') {
+                status = 'completed';
+                statusLabel = 'Completed';
+              } else if (tx.milestones.some(m => m.status === 'AWAITING_REVIEW')) {
+                status = 'review';
+                statusLabel = 'Under Review';
+              } else if (tx.milestones.some(m => m.status === 'PENDING' || m.status === 'REVISION_REQUESTED')) {
+                status = 'in_progress';
+                statusLabel = 'In Progress';
+              }
+              
+              return {
+                id: tx.id,
+                title: tx.title,
+                buyer: tx.buyer.username,
+                amount: parseFloat(tx.total_value),
+                status,
+                statusLabel,
+              };
+            });
+          
+          setActiveTransactions(mapped);
+          
+          // Extract pending work items from milestones
+          const workItems: WorkItem[] = [];
+          transactions.forEach(tx => {
+            tx.milestones
+              .filter(m => m.status === 'PENDING' || m.status === 'REVISION_REQUESTED')
+              .forEach(m => {
+                workItems.push({
+                  id: m.id,
+                  title: m.title,
+                  project: tx.title,
+                  dueDate: 'TBD', // API doesn't provide due date yet
+                });
+              });
+          });
+          setPendingWork(workItems);
+          
+          // Calculate stats
+          const completedCount = transactions.filter(tx => tx.status === 'COMPLETED').length;
+          const activeCount = transactions.filter(tx => tx.status === 'IN_ESCROW').length;
+          const totalEarnings = transactions
+            .filter(tx => tx.status === 'COMPLETED')
+            .reduce((sum, tx) => sum + parseFloat(tx.total_value), 0);
+          
+          setStats({
+            activeTransactions: activeCount,
+            pendingWork: workItems.length,
+            totalEarnings,
+            completedProjects: completedCount,
+          });
+        }
+      } catch (err) {
+        setError('Failed to fetch dashboard data');
+        console.error('Error fetching dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const getStatusBadgeClass = (status: LocalTransaction['status']) => {
     switch (status) {
       case 'pending':
         return styles.pending;
@@ -43,6 +150,26 @@ export default function SellerPortal() {
     console.log('View transaction details:', transactionId);
     // TODO: Implement navigation to transaction details page
   };
+
+  if (loading) {
+    return (
+      <div className={styles.dashboard}>
+        <div className={styles.container}>
+          <div className={styles.header}>Loading your dashboard...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.dashboard}>
+        <div className={styles.container}>
+          <div className={styles.header} style={{ color: 'red' }}>{error}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.dashboard}>

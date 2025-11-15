@@ -1,7 +1,24 @@
 import { MilestoneList } from './MilestoneList';
 import { TransactionViewProps } from '@/types/transaction';
+import { useState } from 'react';
 
 export function TransactionView({ transaction, milestones, isBuyer, isSeller }: TransactionViewProps) {
+    const [submittingReview, setSubmittingReview] = useState(false);
+
+    const handleLeaveReview = async () => {
+        // Review submission endpoint not yet implemented in backend API
+        setSubmittingReview(true);
+        
+        try {
+            // TODO: Implement when backend review endpoint is ready
+            alert('Review submission functionality will be available in a future update. For now, this is a placeholder.');
+            console.log('Leave review for transaction:', transaction.id);
+        } catch (err) {
+            console.error('Error submitting review:', err);
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
     const getStatusBadgeColor = (status: string) => {
         switch (status) {
             case 'IN_ESCROW':
@@ -95,8 +112,12 @@ export function TransactionView({ transaction, milestones, isBuyer, isSeller }: 
                     <p className="text-green-700 mb-4">
                         Congratulations! This project has been completed successfully.
                     </p>
-                    <button className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors">
-                        Leave Review
+                    <button 
+                        onClick={handleLeaveReview}
+                        disabled={submittingReview}
+                        className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {submittingReview ? 'Submitting...' : 'Leave Review'}
                     </button>
                 </div>
             )}

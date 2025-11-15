@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const login = useUserStore((state: { login: (token: string, user: { id: string; email: string; username: string; is_seller: boolean }) => void }) => state.login);
+  const login = useUserStore((state) => state.login);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,15 +44,18 @@ export default function LoginPage() {
       console.log('Login attempt with:', { email });
       
       // Mock login for development
-      const mockToken = 'mock-jwt-token';
+      const mockAccessToken = 'mock-jwt-token';
+      const mockRefreshToken = 'mock-refresh-token';
       const mockUser = {
-        id: '1',
+        id: 1,
         email,
         username: email.split('@')[0],
+        first_name: '',
+        last_name: '',
         is_seller: false,
       };
       
-      login(mockToken, mockUser);
+      login(mockAccessToken, mockRefreshToken, mockUser);
       router.push('/dashboard/buyer');
     } catch (err) {
       setError('Login failed. Please try again.');
