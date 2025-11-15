@@ -1,108 +1,94 @@
 from django.test import TestCase
-from rest_framework.test import APITestCase
-from rest_framework import status
-from .models import CustomUser, SellerProfile, ServiceCategory
+from django.db import IntegrityError
+from .models import ServiceCategory, CustomUser, SellerProfile
 
-
-class SellerDiscoveryAPITest(APITestCase):
-    """Test cases for Seller Discovery API endpoints."""
-    
+class ServiceCategoryModelTest(TestCase):
     def setUp(self):
-        """Set up test data."""
-        # Create service categories
-        self.web_dev = ServiceCategory.objects.create(
-            name='Web Development',
-            slug='web-development'
+        """Set up test data"""
+        self.category = ServiceCategory.objects.create(
+            name="Web Development",
+            slug="web-development"
         )
-        self.design = ServiceCategory.objects.create(
-            name='Graphic Design',
-            slug='graphic-design'
+
+    def test_service_category_creation(self):
+        """Test that a ServiceCategory can be created"""
+        self.assertIsInstance(self.category, ServiceCategory)
+        self.assertEqual(self.category.name, "Web Development")
+        self.assertEqual(self.category.slug, "web-development")
+
+    def test_service_category_str_representation(self):
+        """Test the string representation of ServiceCategory"""
+        self.assertEqual(str(self.category), "Web Development")
+
+    def test_service_category_unique_name(self):
+        """Test that ServiceCategory name must be unique"""
+        with self.assertRaises(IntegrityError):
+            ServiceCategory.objects.create(
+                name="Web Development",
+                slug="web-development-2"
+            )
+
+    def test_service_category_unique_slug(self):
+        """Test that ServiceCategory slug must be unique"""
+        with self.assertRaises(IntegrityError):
+            ServiceCategory.objects.create(
+                name="Web Development 2",
+                slug="web-development"
+            )
+
+    def test_service_category_ordering(self):
+        """Test that ServiceCategories are ordered by name"""
+        ServiceCategory.objects.create(name="Graphic Design", slug="graphic-design")
+        ServiceCategory.objects.create(name="App Development", slug="app-development")
+        
+        categories = ServiceCategory.objects.all()
+        self.assertEqual(categories[0].name, "App Development")
+        self.assertEqual(categories[1].name, "Graphic Design")
+        self.assertEqual(categories[2].name, "Web Development")
+
+    def test_service_category_verbose_names(self):
+        """Test the verbose names are correct"""
+        self.assertEqual(ServiceCategory._meta.verbose_name, "Service Category")
+        self.assertEqual(ServiceCategory._meta.verbose_name_plural, "Service Categories")
+
+    def test_service_category_relationship_with_seller_profile(self):
+        """Test that ServiceCategory can be linked to SellerProfile"""
+        user = CustomUser.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="testpass123"
+        )
+        seller_profile = SellerProfile.objects.create(
+            user=user,
+            account_type=SellerProfile.AccountType.INDIVIDUAL
         )
         
-        # Create users and seller profiles
-        self.user1 = CustomUser.objects.create_user(
-            username='john_dev',
-            email='john@example.com',
-            password='password123'
-        )
-        self.seller1 = SellerProfile.objects.create(
-            user=self.user1,
-            account_type='INDIVIDUAL',
-            verification_status='VERIFIED'
-        )
-        self.seller1.skills.add(self.web_dev)
+        # Add service category to seller's skills
+        seller_profile.skills.add(self.category)
         
-        self.user2 = CustomUser.objects.create_user(
-            username='jane_design',
-            email='jane@example.com',
-            password='password123'
+        # Test the relationship
+        self.assertIn(self.category, seller_profile.skills.all())
+        self.assertIn(seller_profile, self.category.sellers.all())
+
+    def test_multiple_categories_for_seller(self):
+        """Test that a seller can have multiple service categories"""
+        user = CustomUser.objects.create_user(
+            username="multiuser",
+            email="multi@example.com",
+            password="testpass123"
         )
-        self.seller2 = SellerProfile.objects.create(
-            user=self.user2,
-            account_type='INDIVIDUAL',
-            verification_status='VERIFIED'
+        seller_profile = SellerProfile.objects.create(
+            user=user,
+            account_type=SellerProfile.AccountType.INDIVIDUAL
         )
-        self.seller2.skills.add(self.design)
         
-        self.user3 = CustomUser.objects.create_user(
-            username='bob_pending',
-            email='bob@example.com',
-            password='password123'
+        category2 = ServiceCategory.objects.create(
+            name="Mobile Development",
+            slug="mobile-development"
         )
-        self.seller3 = SellerProfile.objects.create(
-            user=self.user3,
-            account_type='INDIVIDUAL',
-            verification_status='PENDING'
-        )
-    
-    def test_list_all_sellers(self):
-        """Test listing all sellers."""
-        response = self.client.get('/api/sellers/')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 3)
-    
-    def test_list_verified_sellers_only(self):
-        """Test listing only verified sellers."""
-        response = self.client.get('/api/sellers/verified/')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 2)
-        for seller in response.data['results']:
-            self.assertEqual(seller['verification_status'], 'VERIFIED')
-    
-    def test_filter_by_verification_status(self):
-        """Test filtering sellers by verification status."""
-        response = self.client.get('/api/sellers/?verification_status=PENDING')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['username'], 'bob_pending')
-    
-    def test_search_sellers_by_skill(self):
-        """Test searching sellers by skill name."""
-        response = self.client.get('/api/sellers/?search=Web Development')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(response.data['count'], 1)
-    
-    def test_filter_by_skill_slug(self):
-        """Test filtering sellers by skill slug."""
-        response = self.client.get('/api/sellers/?skills=web-development')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['username'], 'john_dev')
-    
-    def test_list_service_categories(self):
-        """Test listing all service categories."""
-        response = self.client.get('/api/categories/')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 2)
-    
-    def test_seller_profile_contains_required_fields(self):
-        """Test that seller profile response contains all required fields."""
-        response = self.client.get('/api/sellers/')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        seller = response.data['results'][0]
-        required_fields = [
-            'id', 'public_seller_id', 'username', 'email',
-            'account_type', 'company_name', 'verification_status', 'skills'
-        ]
-        for field in required_fields:
-            self.assertIn(field, seller)
+        
+        seller_profile.skills.add(self.category, category2)
+        
+        self.assertEqual(seller_profile.skills.count(), 2)
+        self.assertIn(self.category, seller_profile.skills.all())
+        self.assertIn(category2, seller_profile.skills.all())

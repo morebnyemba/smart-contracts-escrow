@@ -14,9 +14,9 @@ class ServiceCategory(models.Model):
     slug = models.SlugField(max_length=100, unique=True)
 
     class Meta:
+        verbose_name = "Service Category"
+        verbose_name_plural = "Service Categories"
         ordering = ['name']
-        verbose_name = 'Service Category'
-        verbose_name_plural = 'Service Categories'
 
     def __str__(self):
         return self.name
