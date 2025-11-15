@@ -92,47 +92,79 @@ export default function Home() {
 
           {/* Right Image - Padlock */}
           <div className="relative hidden lg:flex justify-center items-center">
-            <div className="relative w-full max-w-lg">
-              {/* Padlock SVG */}
-              <svg className="w-full h-auto opacity-80" viewBox="0 0 400 500" fill="none">
-                {/* Shackle */}
-                <path 
-                  d="M150 150 L150 100 Q150 50 200 50 Q250 50 250 100 L250 150" 
-                  stroke="#6b7280" 
-                  strokeWidth="30" 
-                  fill="none"
-                  strokeLinecap="round"
-                />
-                {/* Lock Body */}
-                <rect 
-                  x="100" 
-                  y="150" 
-                  width="200" 
-                  height="250" 
-                  rx="20" 
-                  fill="#4b5563"
-                  stroke="#6b7280"
-                  strokeWidth="4"
-                />
-                {/* Keyhole */}
-                <circle cx="200" cy="250" r="25" fill="#1f2937"/>
-                <rect x="190" y="250" width="20" height="50" rx="3" fill="#1f2937"/>
+            <div className="relative w-full max-w-lg h-[500px] flex items-center justify-center">
+              {/* Realistic Padlock Illustration */}
+              <div className="relative">
+                {/* Chain link left */}
+                <div className="absolute -left-24 top-32 w-16 h-16 border-8 border-gray-500 rounded-full opacity-40 transform rotate-12"></div>
                 
-                {/* Shine effect */}
-                <rect 
-                  x="120" 
-                  y="170" 
-                  width="40" 
-                  height="120" 
-                  rx="20" 
-                  fill="white"
-                  opacity="0.15"
-                />
-              </svg>
-              
-              {/* Additional chain elements */}
-              <div className="absolute -left-16 top-1/4 w-20 h-20 border-8 border-gray-500 rounded-full opacity-60"></div>
-              <div className="absolute -right-12 bottom-1/4 w-16 h-16 border-8 border-gray-500 rounded-full opacity-60"></div>
+                {/* Main padlock body */}
+                <svg className="w-80 h-auto" viewBox="0 0 300 400" fill="none">
+                  {/* Shackle - darker metallic */}
+                  <path 
+                    d="M100 120 L100 70 Q100 20 150 20 Q200 20 200 70 L200 120" 
+                    stroke="#4a5568" 
+                    strokeWidth="24" 
+                    fill="none"
+                    strokeLinecap="round"
+                    opacity="0.9"
+                  />
+                  {/* Shackle highlight */}
+                  <path 
+                    d="M105 120 L105 75 Q105 30 150 30 Q195 30 195 75 L195 120" 
+                    stroke="#718096" 
+                    strokeWidth="8" 
+                    fill="none"
+                    strokeLinecap="round"
+                    opacity="0.5"
+                  />
+                  
+                  {/* Lock body - main shape */}
+                  <rect 
+                    x="60" 
+                    y="110" 
+                    width="180" 
+                    height="260" 
+                    rx="25" 
+                    fill="#5a6268"
+                    opacity="0.95"
+                  />
+                  
+                  {/* Lock body shadow */}
+                  <rect 
+                    x="70" 
+                    y="120" 
+                    width="160" 
+                    height="240" 
+                    rx="20" 
+                    fill="#4a5568"
+                    opacity="0.8"
+                  />
+                  
+                  {/* Highlight on lock body */}
+                  <rect 
+                    x="75" 
+                    y="125" 
+                    width="50" 
+                    height="200" 
+                    rx="20" 
+                    fill="white"
+                    opacity="0.12"
+                  />
+                  
+                  {/* Keyhole outer circle */}
+                  <circle cx="150" cy="220" r="28" fill="#2d3748" opacity="0.9"/>
+                  
+                  {/* Keyhole slot */}
+                  <rect x="142" y="220" width="16" height="55" rx="3" fill="#1a202c" opacity="0.95"/>
+                  
+                  {/* Keyhole inner detail */}
+                  <circle cx="150" cy="220" r="12" fill="#000000" opacity="0.7"/>
+                </svg>
+                
+                {/* Chain link right */}
+                <div className="absolute -right-20 bottom-28 w-14 h-14 border-8 border-gray-500 rounded-full opacity-40 transform -rotate-12"></div>
+              </div>
             </div>
           </div>
         </div>
