@@ -11,9 +11,8 @@ interface TransactionPageProps {
     }>;
 }
 
-export default function TransactionPage({ params }: TransactionPageProps) {
-    const unwrappedParams = use(params);
-    const { tx_id } = unwrappedParams;
+export default function TransactionPage({ params }: { params: { tx_id: string } }) {
+    const { tx_id } = params;
     const { user } = useUserStore();
     const { activeTransaction, milestones, fetchTransaction } = useTransactionStore();
     const [isLoading, setIsLoading] = useState(true);
@@ -33,9 +32,23 @@ export default function TransactionPage({ params }: TransactionPageProps) {
             
             // Simulate logged in user (buyer by default, seller if ?as=seller)
             const mockUser = userType === 'seller' 
-                ? { id: 2, username: "seller_user" }
-                : { id: 1, username: "buyer_user" };
-            useUserStore.getState().login("mock-token", mockUser);
+                ? { 
+                    id: 2, 
+                    username: "seller_user",
+                    email: "seller@example.com",
+                    first_name: "Seller",
+                    last_name: "User",
+                    is_seller: true
+                  }
+                : { 
+                    id: 1, 
+                    username: "buyer_user",
+                    email: "buyer@example.com",
+                    first_name: "Buyer",
+                    last_name: "User",
+                    is_seller: false
+                  };
+            useUserStore.getState().login("mock-access-token", "mock-refresh-token", mockUser);
         }
     }, [user]);
 
