@@ -16,6 +16,112 @@ All API endpoints require authentication. The API uses Django REST Framework's S
 
 ## API Endpoints
 
+### Portal Endpoints
+
+Portal endpoints provide specialized views for buyers and sellers to manage their transactions.
+
+#### Buyer Dashboard
+
+Get all transactions where the authenticated user is the buyer.
+
+**Endpoint:** `GET /api/portal/my-transactions/`
+
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- Returns only transactions where the authenticated user is the buyer
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+#### Seller Dashboard
+
+Get all transactions where the authenticated user is the seller.
+
+**Endpoint:** `GET /api/portal/seller/`
+
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- Returns only transactions where the authenticated user is the seller
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+**Retrieve Individual Transaction:**
+
+Sellers can retrieve details of a specific transaction:
+
+**Endpoint:** `GET /api/portal/seller/{id}/`
+
+**Response:** (200 OK) - Returns single transaction object
+
 ### Transactions
 
 #### Create Transaction
