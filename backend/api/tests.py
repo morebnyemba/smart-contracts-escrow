@@ -263,6 +263,85 @@ class MilestoneAPITest(TestCase):
         # Check transaction is completed
         self.transaction.refresh_from_db()
         self.assertEqual(self.transaction.status, EscrowTransaction.TransactionStatus.COMPLETED)
+    
+    def test_open_dispute_as_buyer(self):
+        """Test buyer opening a dispute on a milestone"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Set milestone to awaiting review
+        self.milestone.status = Milestone.MilestoneStatus.AWAITING_REVIEW
+        self.milestone.save()
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/dispute/')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'DISPUTED')
+        
+        # Check milestone status changed
+        self.milestone.refresh_from_db()
+        self.assertEqual(self.milestone.status, Milestone.MilestoneStatus.DISPUTED)
+        
+        # Check transaction status changed
+        self.transaction.refresh_from_db()
+        self.assertEqual(self.transaction.status, EscrowTransaction.TransactionStatus.DISPUTED)
+    
+    def test_open_dispute_from_pending_status(self):
+        """Test buyer can open dispute on pending milestone"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Milestone is in PENDING status by default
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/dispute/')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'DISPUTED')
+    
+    def test_open_dispute_from_revision_requested_status(self):
+        """Test buyer can open dispute on revision requested milestone"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Set milestone to revision requested
+        self.milestone.status = Milestone.MilestoneStatus.REVISION_REQUESTED
+        self.milestone.save()
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/dispute/')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'DISPUTED')
+    
+    def test_only_buyer_can_open_dispute(self):
+        """Test that only the buyer can open a dispute"""
+        self.client.force_authenticate(user=self.seller)
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/dispute/')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Only the buyer', response.data['error'])
+    
+    def test_cannot_dispute_completed_milestone(self):
+        """Test that completed milestones cannot be disputed"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Set milestone to completed
+        self.milestone.status = Milestone.MilestoneStatus.COMPLETED
+        self.milestone.save()
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/dispute/')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Cannot dispute a completed milestone', response.data['error'])
+    
+    def test_cannot_dispute_already_disputed_milestone(self):
+        """Test that already disputed milestones cannot be disputed again"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Set milestone to disputed
+        self.milestone.status = Milestone.MilestoneStatus.DISPUTED
+        self.milestone.save()
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/dispute/')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already disputed', response.data['error'])
 
 
 class WalletAPITest(TestCase):
