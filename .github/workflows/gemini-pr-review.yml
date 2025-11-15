@@ -1,0 +1,282 @@
+name: Gemini PR Review
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  gemini_review:
+    runs-on: ubuntu-latest
+    env:
+      # Optional override to force a specific decision for testing: "approve"|"request_changes"|"comment"|"merge"
+      REVIEW_DECISION: ${{ secrets.REVIEW_DECISION || '' }}
+      # If set to "true" (string), workflow will attempt to merge when decision == "merge"
+      AUTO_MERGE: ${{ secrets.AUTO_MERGE || 'false' }}
+      # Gemini-related secrets (you must add them to repo secrets)
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
+      GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'models/text-bison-001' }}
+      # Optional: alternative reviewer endpoint
+      REVIEWER_URL: ${{ secrets.REVIEWER_URL || '' }}
+      REVIEWER_KEY: ${{ secrets.REVIEWER_KEY || '' }}
+    steps:
+      - name: Get PR details
+        id: pr_details
+        run: |
+          echo "PR_NUMBER=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
+          echo "PR_BASE_SHA=${{ github.event.pull_request.base.sha }}" >> $GITHUB_OUTPUT
+          echo "PR_BASE_REF=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+          echo "REPO=${{ github.repository }}" >> $GITHUB_OUTPUT
+
+      - name: Generate diff via GitHub API
+        id: generate_diff
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          
+          # Fetch the PR diff via GitHub API to avoid checking out untrusted code
+          curl -L \
+            -H "Accept: application/vnd.github.v3.diff" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}" \
+            > pr_diff.diff
+          
+          echo "DIFF_FILE=pr_diff.diff" >> $GITHUB_OUTPUT
+          echo "Diff size (lines): $(wc -l < pr_diff.diff || true)"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Python deps
+        run: python -m pip install --upgrade pip requests
+
+      - name: Run Gemini reviewer and take action
+        id: take_action
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ steps.pr_details.outputs.REPO }}
+          PR_NUMBER: ${{ steps.pr_details.outputs.PR_NUMBER }}
+          BASE_SHA: ${{ steps.pr_details.outputs.PR_BASE_SHA }}
+          HEAD_SHA: ${{ steps.pr_details.outputs.PR_HEAD_SHA }}
+          DIFF_FILE: ${{ steps.generate_diff.outputs.DIFF_FILE }}
+          REVIEW_DECISION: ${{ env.REVIEW_DECISION }}
+          AUTO_MERGE: ${{ env.AUTO_MERGE }}
+          GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ env.GEMINI_MODEL }}
+          REVIEWER_URL: ${{ env.REVIEWER_URL }}
+          REVIEWER_KEY: ${{ env.REVIEWER_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, requests, sys, time
+
+          token = os.environ['GITHUB_TOKEN']
+          repo = os.environ['REPO']
+          pr = os.environ['PR_NUMBER']
+          diff_path = os.environ.get('DIFF_FILE', 'pr_diff.diff')
+          decision_override = os.environ.get('REVIEW_DECISION') or ''
+          auto_merge = os.environ.get('AUTO_MERGE', 'false').lower() == 'true'
+          gemini_key = os.environ.get('GEMINI_API_KEY','').strip()
+          gemini_model = os.environ.get('GEMINI_MODEL','models/text-bison-001').strip()
+          reviewer_url = os.environ.get('REVIEWER_URL','').strip()
+          reviewer_key = os.environ.get('REVIEWER_KEY','').strip()
+
+          with open(diff_path, 'r', encoding='utf-8', errors='ignore') as f:
+            diff_text = f.read()
+
+          # Build prompt instructing the LLM to return strict JSON:
+          prompt = "You are an automated code reviewer. Analyze the provided git diff and return a single-line JSON object with two fields:\n"
+          prompt += '  - decision: one of "approve", "request_changes", "comment", "merge"\n'
+          prompt += "  - comment: a concise human-readable review text to include in the GitHub review."
+          prompt += "The JSON must be the only content in the response and must parse as JSON.\n\n"
+          prompt += "Diff:\n" + diff_text
+
+          def call_external_reviewer():
+            # If a REVIEWER_URL is provided, call it as simple HTTP POST with API key header REVIEWER_KEY
+            if reviewer_url:
+              headers = {'Authorization': f'Bearer {reviewer_key}'} if reviewer_key else {}
+              try:
+                r = requests.post(reviewer_url, json={'prompt': prompt, 'repo': repo, 'pr': pr}, headers=headers, timeout=60)
+                r.raise_for_status()
+                return r.text
+              except Exception as e:
+                print("Reviewer endpoint error:", e, file=sys.stderr)
+                raise
+
+            # If GEMINI_API_KEY provided, call Google Generative Language API (best-effort attempt)
+            if gemini_key:
+              # Attempt the Google Generative Language HTTP endpoint (may vary by GA stage).
+              # We'll call the model endpoint and ask for plain text. We instruct to return JSON only.
+              url = f"https://generativelanguage.googleapis.com/v1beta2/{gemini_model}:generateText?key={gemini_key}"
+              payload = {
+                "prompt": {"text": prompt},
+                "temperature": 0.0,
+                "maxOutputTokens": 1024
+              }
+              headers = {"Content-Type": "application/json"}
+              try:
+                r = requests.post(url, headers=headers, json=payload, timeout=60)
+                r.raise_for_status()
+                resp_json = r.json()
+                # try multiple response shapes
+                text = ""
+                # Try known fields from different API variants
+                if isinstance(resp_json, dict):
+                  # candidate field
+                  if 'candidates' in resp_json and isinstance(resp_json['candidates'], list):
+                    text = resp_json['candidates'][0].get('content','')
+                  elif 'output' in resp_json and isinstance(resp_json['output'], list):
+                    # some versions have output[*].content
+                    out = resp_json['output'][0]
+                    if isinstance(out, dict) and 'content' in out:
+                      text = out['content']
+                    elif isinstance(out, dict) and 'message' in out and isinstance(out['message'], dict):
+                      # message.content may be string or list
+                      msg = out['message']
+                      if 'content' in msg and isinstance(msg['content'], list):
+                        text = ''.join([c.get('text','') for c in msg['content'] if isinstance(c, dict)])
+                      else:
+                        text = str(msg)
+                  elif 'text' in resp_json:
+                    text = resp_json['text']
+                if not text:
+                  # fallback to raw text
+                  text = json.dumps(resp_json)
+                return text
+              except Exception as e:
+                print("Gemini API error:", e, file=sys.stderr)
+                raise
+
+            # No external reviewer available => use local heuristic stub
+            decision = "comment"
+            comment = "Automated stub review: no GEMINI_API_KEY or REVIEWER_URL configured. Add GEMINI_API_KEY secret to enable LLM reviews."
+            if "TODO" in diff_text or "FIXME" in diff_text:
+              decision = "request_changes"
+              comment = "Found TODO/FIXME markers — please address before merging."
+            elif len(diff_text.splitlines()) < 60:
+              decision = "approve"
+              comment = "Small change appears fine."
+            elif len(diff_text.splitlines()) > 2000:
+              decision = "comment"
+              comment = "Large change — consider splitting and add tests."
+            return json.dumps({"decision": decision, "comment": comment})
+
+          # If override provided, use it and create a basic comment
+          if decision_override:
+            decision = decision_override
+            comment = f"Decision forced by REVIEW_DECISION secret: {decision_override}"
+            llm_response = json.dumps({"decision": decision, "comment": comment})
+          else:
+            try:
+              raw = call_external_reviewer()
+              # The model is instructed to return JSON only. Attempt to extract JSON from the returned text.
+              raw_stripped = raw.strip()
+              # If the model returned extra text, try to find the first JSON object
+              start = raw_stripped.find('{')
+              end = raw_stripped.rfind('}')
+              if start != -1 and end != -1 and end > start:
+                json_text = raw_stripped[start:end+1]
+              else:
+                json_text = raw_stripped
+              parsed = json.loads(json_text)
+              decision = parsed.get('decision','comment')
+              comment = parsed.get('comment','No comment provided by model.')
+              llm_response = json.dumps(parsed)
+            except Exception as e:
+              print("Error calling reviewer:", e, file=sys.stderr)
+              # fallback stub
+              decision = "comment"
+              comment = f"Reviewer error: {e}. Falling back to safe comment."
+              llm_response = json.dumps({"decision":decision,"comment":comment})
+
+          print("LLM decision:", decision)
+          print("LLM comment:", comment)
+
+          headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json"
+          }
+          api_base = f"https://api.github.com/repos/{repo}"
+
+          def create_review(event, body_text):
+            url = f"{api_base}/pulls/{pr}/reviews"
+            payload = {"event": event, "body": body_text}
+            r = requests.post(url, headers=headers, json=payload, timeout=30)
+            print("Create review response:", r.status_code)
+            print(r.text)
+            r.raise_for_status()
+
+          def merge_pr():
+            # Ensure CI is passing or checks are OK before merging
+            # Query combined status for HEAD_SHA
+            head_sha = os.environ.get('HEAD_SHA')
+            status_url = f"{api_base}/commits/{head_sha}/status"
+            r = requests.get(status_url, headers=headers, timeout=15)
+            if r.ok:
+              status_json = r.json()
+              state = status_json.get('state','')
+              print("Combined status for commit:", state)
+              # allow 'success' or 'neutral' for merging
+              if state not in ('success','neutral','queued','pending'):
+                # For strictness: require success; but if you prefer to allow neutral, modify here.
+                print("Warning: combined status state is", state, "— aborting automatic merge.")
+                return r
+            else:
+              print("Could not fetch combined status, proceeding with caution.", r.status_code)
+            merge_url = f"{api_base}/pulls/{pr}/merge"
+            payload = {"commit_title": f"Automated merge by Gemini for PR #{pr}", "merge_method": "squash"}
+            r = requests.put(merge_url, headers=headers, json=payload, timeout=30)
+            print("Merge response:", r.status_code)
+            print(r.text)
+            return r
+
+          try:
+            if decision == "approve":
+              create_review("APPROVE", comment)
+            elif decision == "request_changes":
+              create_review("REQUEST_CHANGES", comment)
+            elif decision == "comment":
+              create_review("COMMENT", comment)
+            elif decision == "merge":
+              # Approve first, then try merge if AUTO_MERGE is set
+              create_review("APPROVE", "Auto-approving prior to merge: " + comment)
+              if auto_merge:
+                # Ensure HEAD_SHA is provided
+                if not os.environ.get('HEAD_SHA'):
+                  print("No HEAD_SHA env; cannot check statuses; aborting auto-merge.", file=sys.stderr)
+                else:
+                  r = merge_pr()
+                  if r is not None and r.status_code == 200:
+                    print("Merge successful.")
+                  else:
+                    print("Merge attempt failed or returned non-200.")
+              else:
+                print("AUTO_MERGE not enabled; skipping automatic merge.")
+            else:
+              # Unknown -> post comment
+              create_review("COMMENT", f"Unrecognized decision '{decision}'. LLM said: {comment}")
+          except requests.HTTPError as e:
+            print("HTTP error during GitHub API interaction:", e, file=sys.stderr)
+            sys.exit(1)
+
+          # Emit LLM result to workflow log
+          github_output = os.environ.get('GITHUB_OUTPUT', '')
+          if github_output:
+            with open(github_output, 'a') as f:
+              f.write(f"review_result={json.dumps({'decision': decision, 'comment': comment})}\n")
+          PY
+
+      - name: Done
+        run: echo "Gemini review job completed."

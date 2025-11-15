@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Transaction, Milestone } from '@/types/transaction';
 
 interface User {
   id: number;
@@ -44,7 +45,7 @@ export const useTransactionStore = create<TransactionState>((set) => ({
     };
     const dummyMilestones: Milestone[] = [
       { id: 101, title: "Milestone 1", value: 50.00, status: "AWAITING_REVIEW", transaction_id: tx_id },
-      { id: 102, title: "Milestone 2", value: 50.00, status: "PENDING", transaction_id: tx_id },
+      { id: 102, title: "Milestone 2", value: 50.00, status: "REVISION_REQUESTED", transaction_id: tx_id },
       { id: 103, title: "Milestone 3", value: 50.00, status: "PENDING", transaction_id: tx_id },
       { id: 104, title: "Milestone 4", value: 50.00, status: "PENDING", transaction_id: tx_id },
     ];
