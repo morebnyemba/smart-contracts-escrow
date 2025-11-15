@@ -4,6 +4,7 @@ __pycache__/
 .env
 db.sqlite3
 /media
+backend/media/
 cookies.txt
 
 # Frontend (Next.js)

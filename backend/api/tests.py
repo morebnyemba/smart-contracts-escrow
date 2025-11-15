@@ -306,3 +306,4 @@ class WalletAPITest(TestCase):
         self.assertEqual(len(response.data['results']), 1)
         # Should only see own wallet
         self.assertEqual(response.data['results'][0]['user']['id'], self.user.id)
+
