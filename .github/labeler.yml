@@ -1,12 +1,12 @@
 backend:
-  - backend/**/*
+  - "backend/**/*"
 
 frontend:
-  - frontend/**/*
+  - "frontend/**/*"
 
 docs:
-  - '**/*.md'
-  - 'docs/**/*'
+  - "**/*.md"
+  - "docs/**/*"
 
 github-actions:
-  - .github/workflows/**/*
+  - ".github/workflows/**/*"
