@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 class EscrowTransaction(models.Model):
     class TransactionStatus(models.TextChoices):
@@ -32,3 +33,13 @@ class Milestone(models.Model):
     value = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=MilestoneStatus.choices, default=MilestoneStatus.PENDING)
     submission_details = models.TextField(blank=True)
+
+class Review(models.Model):
+    transaction = models.ForeignKey(EscrowTransaction, on_delete=models.CASCADE, related_name='reviews')
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='reviews_given')
+    rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['transaction', 'reviewer']

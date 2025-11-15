@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from transactions.models import EscrowTransaction, Milestone
+from transactions.models import EscrowTransaction, Milestone, Review
 from wallets.models import UserWallet
 from users.models import CustomUser
 
@@ -90,3 +90,17 @@ class UserWalletSerializer(serializers.ModelSerializer):
         model = UserWallet
         fields = ['id', 'user', 'balance']
         read_only_fields = ['id', 'user', 'balance']
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    reviewer = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Review
+        fields = ['id', 'transaction', 'reviewer', 'rating', 'comment', 'created_at']
+        read_only_fields = ['id', 'transaction', 'reviewer', 'created_at']
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5.")
+        return value
