@@ -225,3 +225,47 @@ export const searchAPI = {
     });
   },
 };
+
+// Notifications API
+export interface Notification {
+  id: number;
+  recipient: number;
+  recipient_username: string;
+  notification_type: 'TRANSACTION_ACCEPTED' | 'ESCROW_FUNDED' | 'WORK_SUBMITTED' | 'MILESTONE_APPROVED' | 'REVISION_REQUESTED' | 'TRANSACTION_COMPLETED';
+  message: string;
+  transaction: number | null;
+  transaction_title: string | null;
+  milestone: number | null;
+  milestone_title: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: Notification[];
+}
+
+export const notificationAPI = {
+  getAll: () =>
+    fetchAPI<NotificationResponse>('/api/notifications/', {
+      method: 'GET',
+    }),
+
+  getUnreadCount: () =>
+    fetchAPI<{ count: number }>('/api/notifications/unread_count/', {
+      method: 'GET',
+    }),
+
+  markAsRead: (id: number) =>
+    fetchAPI<Notification>(`/api/notifications/${id}/mark_as_read/`, {
+      method: 'POST',
+    }),
+
+  markAllAsRead: () =>
+    fetchAPI<{ message: string }>('/api/notifications/mark_all_as_read/', {
+      method: 'POST',
+    }),
+};
