@@ -2,6 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
+from django.core.files.uploadedfile import SimpleUploadedFile
 from .models import CustomUser, SellerProfile, ServiceCategory
 from wallets.models import UserWallet
 import uuid
@@ -102,133 +103,175 @@ class SellerProfileLookupAPITestCase(APITestCase):
         self.assertEqual(len(response.data['skills']), 0)
 
 
-class UserRegistrationAPITestCase(APITestCase):
-    def test_register_user_success(self):
-        """Test successful user registration."""
-        url = reverse('register')
-        data = {
-            'username': 'newuser',
-            'email': 'newuser@example.com',
-            'password': 'securepassword123'
-        }
-        response = self.client.post(url, data, format='json')
-        
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('message', response.data)
-        self.assertEqual(response.data['message'], 'User registered successfully')
-        
-        # Verify user was created
-        self.assertTrue(CustomUser.objects.filter(username='newuser').exists())
-        user = CustomUser.objects.get(username='newuser')
-        self.assertEqual(user.email, 'newuser@example.com')
-        
-        # Verify password is hashed
-        self.assertTrue(user.check_password('securepassword123'))
-        
-        # Verify wallet was created
-        self.assertTrue(UserWallet.objects.filter(user=user).exists())
-        wallet = UserWallet.objects.get(user=user)
-        self.assertEqual(wallet.balance, 0.00)
-    
-    def test_register_user_missing_username(self):
-        """Test registration fails with missing username."""
-        url = reverse('register')
-        data = {
-            'email': 'newuser@example.com',
-            'password': 'securepassword123'
-        }
-        response = self.client.post(url, data, format='json')
-        
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('username', response.data)
-    
-    def test_register_user_missing_email(self):
-        """Test registration fails with missing email."""
-        url = reverse('register')
-        data = {
-            'username': 'newuser',
-            'password': 'securepassword123'
-        }
-        response = self.client.post(url, data, format='json')
-        
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('email', response.data)
-    
-    def test_register_user_missing_password(self):
-        """Test registration fails with missing password."""
-        url = reverse('register')
-        data = {
-            'username': 'newuser',
-            'email': 'newuser@example.com'
-        }
-        response = self.client.post(url, data, format='json')
-        
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data)
-    
-    def test_register_user_duplicate_username(self):
-        """Test registration fails with duplicate username."""
-        # Create existing user
-        CustomUser.objects.create_user(
-            username='existinguser',
-            email='existing@example.com',
-            password='password123'
+class SellerOnboardingAPITestCase(APITestCase):
+    def setUp(self):
+        """Set up test data for seller onboarding tests."""
+        # Create a user
+        self.user = CustomUser.objects.create_user(
+            username='newuser',
+            email='newuser@example.com',
+            password='testpassword123'
         )
         
-        url = reverse('register')
+        # Create service categories
+        self.category1 = ServiceCategory.objects.create(
+            name='Web Development',
+            slug='web-development'
+        )
+        self.category2 = ServiceCategory.objects.create(
+            name='Design',
+            slug='design'
+        )
+    
+    def test_create_seller_profile_without_authentication(self):
+        """Test that unauthenticated users cannot create seller profile"""
+        url = reverse('seller-onboarding')
         data = {
-            'username': 'existinguser',
-            'email': 'newemail@example.com',
-            'password': 'securepassword123'
+            'account_type': 'INDIVIDUAL',
+            'bio': 'Test bio',
         }
         response = self.client.post(url, data, format='json')
-        
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('username', response.data)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
     
-    def test_register_user_duplicate_email(self):
-        """Test registration fails with duplicate email."""
-        # Create existing user
-        CustomUser.objects.create_user(
-            username='existinguser',
-            email='existing@example.com',
-            password='password123'
+    def test_create_seller_profile_minimal(self):
+        """Test creating a seller profile with minimal data"""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('seller-onboarding')
+        
+        data = {
+            'account_type': 'INDIVIDUAL',
+            'bio': 'I am a web developer with 5 years of experience.',
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['account_type'], 'INDIVIDUAL')
+        self.assertEqual(response.data['bio'], 'I am a web developer with 5 years of experience.')
+        self.assertEqual(response.data['verification_status'], 'UNVERIFIED')
+        
+        # Verify profile was created in database
+        seller_profile = SellerProfile.objects.get(user=self.user)
+        self.assertEqual(seller_profile.account_type, 'INDIVIDUAL')
+        self.assertEqual(seller_profile.verification_status, SellerProfile.VerificationStatus.UNVERIFIED)
+    
+    def test_create_seller_profile_with_skills(self):
+        """Test creating a seller profile with skills"""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('seller-onboarding')
+        
+        data = {
+            'account_type': 'INDIVIDUAL',
+            'bio': 'Designer and developer',
+            'skill_ids': [self.category1.id, self.category2.id]
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data['skills']), 2)
+        
+        # Verify skills were added
+        seller_profile = SellerProfile.objects.get(user=self.user)
+        self.assertEqual(seller_profile.skills.count(), 2)
+    
+    def test_create_seller_profile_company(self):
+        """Test creating a company seller profile"""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('seller-onboarding')
+        
+        data = {
+            'account_type': 'COMPANY',
+            'company_name': 'Test Company LLC',
+            'bio': 'We provide professional web services',
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['account_type'], 'COMPANY')
+        self.assertEqual(response.data['company_name'], 'Test Company LLC')
+    
+    def test_create_seller_profile_with_verification_document(self):
+        """Test creating a seller profile with verification document sets status to PENDING"""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('seller-onboarding')
+        
+        # Create a simple test file
+        verification_doc = SimpleUploadedFile(
+            "verification.pdf",
+            b"file_content",
+            content_type="application/pdf"
         )
         
-        url = reverse('register')
         data = {
-            'username': 'newuser',
-            'email': 'existing@example.com',
-            'password': 'securepassword123'
+            'account_type': 'INDIVIDUAL',
+            'bio': 'Test bio',
+            'verification_document': verification_doc,
         }
-        response = self.client.post(url, data, format='json')
         
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('email', response.data)
-    
-    def test_register_endpoint_public(self):
-        """Test that registration endpoint doesn't require authentication."""
-        url = reverse('register')
-        data = {
-            'username': 'publicuser',
-            'email': 'public@example.com',
-            'password': 'securepassword123'
-        }
-        # Make request without authentication
-        response = self.client.post(url, data, format='json')
-        
-        # Should succeed without authentication
+        response = self.client.post(url, data, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-    
-    def test_register_user_weak_password(self):
-        """Test registration fails with weak password."""
-        url = reverse('register')
-        data = {
-            'username': 'weakpassuser',
-            'email': 'weak@example.com',
-            'password': '123'
-        }
-        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.data['verification_status'], 'PENDING')
         
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data)
+        # Verify in database
+        seller_profile = SellerProfile.objects.get(user=self.user)
+        self.assertEqual(seller_profile.verification_status, SellerProfile.VerificationStatus.PENDING)
+        self.assertIsNotNone(seller_profile.verification_document)
+    
+    def test_update_existing_seller_profile(self):
+        """Test updating an existing seller profile"""
+        # Create initial seller profile
+        seller_profile = SellerProfile.objects.create(
+            user=self.user,
+            account_type=SellerProfile.AccountType.INDIVIDUAL,
+            bio='Original bio',
+            verification_status=SellerProfile.VerificationStatus.UNVERIFIED
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('seller-onboarding')
+        
+        data = {
+            'bio': 'Updated bio with more information',
+            'account_type': 'COMPANY',
+            'company_name': 'New Company',
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['bio'], 'Updated bio with more information')
+        self.assertEqual(response.data['company_name'], 'New Company')
+        
+        # Verify update in database
+        seller_profile.refresh_from_db()
+        self.assertEqual(seller_profile.bio, 'Updated bio with more information')
+        self.assertEqual(seller_profile.company_name, 'New Company')
+    
+    def test_update_verification_document_sets_pending(self):
+        """Test that updating verification document sets status to PENDING"""
+        # Create initial seller profile
+        seller_profile = SellerProfile.objects.create(
+            user=self.user,
+            account_type=SellerProfile.AccountType.INDIVIDUAL,
+            bio='Original bio',
+            verification_status=SellerProfile.VerificationStatus.UNVERIFIED
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('seller-onboarding')
+        
+        verification_doc = SimpleUploadedFile(
+            "new_verification.pdf",
+            b"new_file_content",
+            content_type="application/pdf"
+        )
+        
+        data = {
+            'verification_document': verification_doc,
+        }
+        
+        response = self.client.post(url, data, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['verification_status'], 'PENDING')
+        
+        # Verify in database
+        seller_profile.refresh_from_db()
+        self.assertEqual(seller_profile.verification_status, SellerProfile.VerificationStatus.PENDING)

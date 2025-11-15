@@ -1,11 +1,12 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
 from django.db.models import Q
+from django.core.mail import mail_admins
 from .models import SellerProfile, ServiceCategory
-from .serializers import SellerProfileSerializer, ServiceCategorySerializer, UserRegistrationSerializer
+from .serializers import SellerProfileSerializer, ServiceCategorySerializer, SellerOnboardingSerializer
 
 
 class SellerProfileViewSet(viewsets.ReadOnlyModelViewSet):
@@ -69,20 +70,48 @@ class ServiceCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['name', 'slug']
 
 
-class RegisterView(APIView):
+class SellerOnboardingView(APIView):
     """
-    API endpoint for user registration.
-    Accepts username, email, and password to create a new user account.
-    Also creates an associated UserWallet for the new user.
+    API endpoint for seller onboarding.
+    Allows authenticated users to create or update their seller profile.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        serializer = UserRegistrationSerializer(data=request.data)
+        """Create or update seller profile for the authenticated user"""
+        user = request.user
+        
+        try:
+            # Check if seller profile already exists
+            seller_profile = SellerProfile.objects.get(user=user)
+            serializer = SellerOnboardingSerializer(seller_profile, data=request.data, partial=True)
+            is_update = True
+        except SellerProfile.DoesNotExist:
+            serializer = SellerOnboardingSerializer(data=request.data)
+            is_update = False
+        
         if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {'message': 'User registered successfully'},
-                status=status.HTTP_201_CREATED
-            )
+            if is_update:
+                seller_profile = serializer.save()
+            else:
+                seller_profile = serializer.save(user=user)
+            
+            # Notify admin if verification document was submitted and status is PENDING
+            if seller_profile.verification_document and seller_profile.verification_status == SellerProfile.VerificationStatus.PENDING:
+                try:
+                    mail_admins(
+                        subject='New Seller Verification Submission',
+                        message=f'User {user.username} ({user.email}) has submitted a seller profile for verification.\n\n'
+                                f'Profile ID: {seller_profile.id}\n'
+                                f'Account Type: {seller_profile.account_type}\n'
+                                f'Company Name: {seller_profile.company_name or "N/A"}\n\n'
+                                f'Please review the submission in the admin panel.',
+                    )
+                except Exception as e:
+                    # Log the error but don't fail the request
+                    pass
+            
+            return Response(serializer.data, status=status.HTTP_200_OK if is_update else status.HTTP_201_CREATED)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
