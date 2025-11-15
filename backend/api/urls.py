@@ -1,8 +1,12 @@
-from django.urls import path
-from .views import SellerSearchView
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import EscrowTransactionViewSet, MilestoneViewSet, UserWalletViewSet
 
-app_name = 'api'
+router = DefaultRouter()
+router.register(r'transactions', EscrowTransactionViewSet, basename='transaction')
+router.register(r'milestones', MilestoneViewSet, basename='milestone')
+router.register(r'wallets', UserWalletViewSet, basename='wallet')
 
 urlpatterns = [
-    path('sellers/search/', SellerSearchView.as_view(), name='seller-search'),
+    path('', include(router.urls)),
 ]

@@ -1,188 +1,308 @@
 from django.test import TestCase
-from django.urls import reverse
+from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
-from users.models import CustomUser, SellerProfile, ServiceCategory
+from decimal import Decimal
+
+from transactions.models import EscrowTransaction, Milestone
+from wallets.models import UserWallet
+
+User = get_user_model()
 
 
-class SellerSearchAPITest(TestCase):
-    """Test suite for the seller search API endpoint"""
-    
+class TransactionAPITest(TestCase):
     def setUp(self):
-        """Set up test data"""
         self.client = APIClient()
-        
-        # Create service categories
-        self.web_dev = ServiceCategory.objects.create(
-            name='Web Development',
-            slug='web-development'
+        self.buyer = User.objects.create_user(
+            username='buyer',
+            email='buyer@test.com',
+            password='password123'
         )
-        self.mobile_dev = ServiceCategory.objects.create(
-            name='Mobile Development',
-            slug='mobile-development'
-        )
-        self.design = ServiceCategory.objects.create(
-            name='Graphic Design',
-            slug='graphic-design'
+        self.seller = User.objects.create_user(
+            username='seller',
+            email='seller@test.com',
+            password='password123'
         )
         
-        # Create users and seller profiles
-        # Verified seller with web development skill
-        self.user1 = CustomUser.objects.create_user(
-            username='webdev1',
-            email='webdev1@example.com',
-            password='testpass123'
+        # Create wallet for buyer with sufficient funds
+        self.buyer_wallet = UserWallet.objects.create(
+            user=self.buyer,
+            balance=Decimal('1000.00')
         )
-        self.seller1 = SellerProfile.objects.create(
-            user=self.user1,
-            account_type=SellerProfile.AccountType.INDIVIDUAL,
-            verification_status=SellerProfile.VerificationStatus.VERIFIED
-        )
-        self.seller1.skills.add(self.web_dev)
+
+    def test_create_transaction(self):
+        """Test creating a transaction via API"""
+        self.client.force_authenticate(user=self.buyer)
         
-        # Verified seller with multiple skills
-        self.user2 = CustomUser.objects.create_user(
-            username='fullstack1',
-            email='fullstack1@example.com',
-            password='testpass123'
-        )
-        self.seller2 = SellerProfile.objects.create(
-            user=self.user2,
-            account_type=SellerProfile.AccountType.COMPANY,
-            company_name='Tech Solutions Inc',
-            verification_status=SellerProfile.VerificationStatus.VERIFIED
-        )
-        self.seller2.skills.add(self.web_dev, self.mobile_dev)
+        data = {
+            'title': 'New Project',
+            'seller': self.seller.id,
+            'milestones': [
+                {'title': 'Milestone 1', 'description': 'First milestone', 'value': '50.00'},
+                {'title': 'Milestone 2', 'description': 'Second milestone', 'value': '50.00'},
+            ]
+        }
         
-        # Unverified seller with web development skill (should not appear in results)
-        self.user3 = CustomUser.objects.create_user(
-            username='unverified1',
-            email='unverified1@example.com',
-            password='testpass123'
-        )
-        self.seller3 = SellerProfile.objects.create(
-            user=self.user3,
-            account_type=SellerProfile.AccountType.INDIVIDUAL,
-            verification_status=SellerProfile.VerificationStatus.UNVERIFIED
-        )
-        self.seller3.skills.add(self.web_dev)
+        response = self.client.post('/api/transactions/', data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['title'], 'New Project')
+        self.assertEqual(response.data['total_value'], '100.00')
+        self.assertEqual(response.data['status'], 'PENDING_FUNDING')
+        self.assertEqual(len(response.data['milestones']), 2)
+
+    def test_create_transaction_without_milestones(self):
+        """Test that creating a transaction without milestones fails"""
+        self.client.force_authenticate(user=self.buyer)
         
-        # Pending verification seller with design skill
-        self.user4 = CustomUser.objects.create_user(
-            username='pending1',
-            email='pending1@example.com',
-            password='testpass123'
-        )
-        self.seller4 = SellerProfile.objects.create(
-            user=self.user4,
-            account_type=SellerProfile.AccountType.INDIVIDUAL,
-            verification_status=SellerProfile.VerificationStatus.PENDING
-        )
-        self.seller4.skills.add(self.design)
+        data = {
+            'title': 'New Project',
+            'seller': self.seller.id,
+            'milestones': []
+        }
         
-        # Verified seller with only design skill
-        self.user5 = CustomUser.objects.create_user(
-            username='designer1',
-            email='designer1@example.com',
-            password='testpass123'
-        )
-        self.seller5 = SellerProfile.objects.create(
-            user=self.user5,
-            account_type=SellerProfile.AccountType.INDIVIDUAL,
-            verification_status=SellerProfile.VerificationStatus.VERIFIED
-        )
-        self.seller5.skills.add(self.design)
-        
-        self.search_url = reverse('api:seller-search')
-    
-    def test_search_sellers_by_skill_success(self):
-        """Test successful search for sellers with a specific skill"""
-        response = self.client.get(self.search_url, {'skill': 'web-development'})
-        
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)  # Should return 2 verified sellers
-        
-        # Verify the returned sellers have the correct skill
-        usernames = [seller['username'] for seller in response.data]
-        self.assertIn('webdev1', usernames)
-        self.assertIn('fullstack1', usernames)
-        self.assertNotIn('unverified1', usernames)  # Unverified should not appear
-    
-    def test_search_sellers_only_returns_verified(self):
-        """Test that only verified sellers are returned"""
-        response = self.client.get(self.search_url, {'skill': 'web-development'})
-        
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        for seller in response.data:
-            self.assertEqual(seller['verification_status'], 'VERIFIED')
-    
-    def test_search_sellers_different_skill(self):
-        """Test search for sellers with a different skill"""
-        response = self.client.get(self.search_url, {'skill': 'graphic-design'})
-        
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)  # Only 1 verified designer
-        self.assertEqual(response.data[0]['username'], 'designer1')
-    
-    def test_search_sellers_no_skill_parameter(self):
-        """Test that request without skill parameter returns error"""
-        response = self.client.get(self.search_url)
-        
+        response = self.client.post('/api/transactions/', data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
-        self.assertIn('required', response.data['error'].lower())
-    
-    def test_search_sellers_nonexistent_skill(self):
-        """Test search for a skill that doesn't exist"""
-        response = self.client.get(self.search_url, {'skill': 'nonexistent-skill'})
+
+    def test_list_transactions(self):
+        """Test listing transactions for authenticated user"""
+        self.client.force_authenticate(user=self.buyer)
         
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertIn('error', response.data)
-        self.assertIn('not found', response.data['error'].lower())
-    
-    def test_search_sellers_no_matches(self):
-        """Test search for skill with no verified sellers"""
-        # Create a new skill with no verified sellers
-        new_skill = ServiceCategory.objects.create(
-            name='Data Science',
-            slug='data-science'
+        # Create a transaction
+        transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller
         )
         
-        response = self.client.get(self.search_url, {'skill': 'data-science'})
+        response = self.client.get('/api/transactions/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+
+    def test_fund_transaction(self):
+        """Test funding a transaction"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Create a transaction
+        transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.PENDING_FUNDING
+        )
+        
+        response = self.client.post(f'/api/transactions/{transaction.id}/fund/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'IN_ESCROW')
+        
+        # Check buyer wallet balance was deducted
+        self.buyer_wallet.refresh_from_db()
+        self.assertEqual(self.buyer_wallet.balance, Decimal('900.00'))
+
+    def test_fund_transaction_insufficient_funds(self):
+        """Test funding a transaction with insufficient funds"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Set buyer wallet to low balance
+        self.buyer_wallet.balance = Decimal('50.00')
+        self.buyer_wallet.save()
+        
+        # Create a transaction that costs more
+        transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.PENDING_FUNDING
+        )
+        
+        response = self.client.post(f'/api/transactions/{transaction.id}/fund/')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Insufficient funds', response.data['error'])
+
+    def test_only_buyer_can_fund(self):
+        """Test that only the buyer can fund a transaction"""
+        self.client.force_authenticate(user=self.seller)
+        
+        transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.PENDING_FUNDING
+        )
+        
+        response = self.client.post(f'/api/transactions/{transaction.id}/fund/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class MilestoneAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.buyer = User.objects.create_user(
+            username='buyer',
+            email='buyer@test.com',
+            password='password123'
+        )
+        self.seller = User.objects.create_user(
+            username='seller',
+            email='seller@test.com',
+            password='password123'
+        )
+        
+        self.transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.IN_ESCROW
+        )
+        
+        self.milestone = Milestone.objects.create(
+            transaction=self.transaction,
+            title='Milestone 1',
+            value=Decimal('50.00'),
+            status=Milestone.MilestoneStatus.PENDING
+        )
+        
+        # Create seller wallet
+        self.seller_wallet = UserWallet.objects.create(
+            user=self.seller,
+            balance=Decimal('0.00')
+        )
+
+    def test_submit_milestone(self):
+        """Test seller submitting work for a milestone"""
+        self.client.force_authenticate(user=self.seller)
+        
+        data = {'submission_details': 'Work completed and submitted'}
+        response = self.client.post(
+            f'/api/milestones/{self.milestone.id}/submit/',
+            data,
+            format='json'
+        )
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 0)
-    
-    def test_response_includes_all_required_fields(self):
-        """Test that response includes all expected fields"""
-        response = self.client.get(self.search_url, {'skill': 'web-development'})
+        self.assertEqual(response.data['status'], 'AWAITING_REVIEW')
+        self.assertEqual(response.data['submission_details'], 'Work completed and submitted')
+
+    def test_only_seller_can_submit(self):
+        """Test that only the seller can submit work"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        data = {'submission_details': 'Work completed'}
+        response = self.client.post(
+            f'/api/milestones/{self.milestone.id}/submit/',
+            data,
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_approve_milestone(self):
+        """Test buyer approving a milestone"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Set milestone to awaiting review
+        self.milestone.status = Milestone.MilestoneStatus.AWAITING_REVIEW
+        self.milestone.save()
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/approve/')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreater(len(response.data), 0)
+        self.assertEqual(response.data['status'], 'COMPLETED')
         
-        seller = response.data[0]
-        required_fields = [
-            'public_seller_id',
-            'username',
-            'account_type',
-            'company_name',
-            'verification_status',
-            'skills'
-        ]
-        for field in required_fields:
-            self.assertIn(field, seller)
-    
-    def test_skills_field_includes_details(self):
-        """Test that skills field includes skill name and slug"""
-        response = self.client.get(self.search_url, {'skill': 'web-development'})
+        # Check seller wallet received payment
+        self.seller_wallet.refresh_from_db()
+        self.assertEqual(self.seller_wallet.balance, Decimal('50.00'))
+
+    def test_only_buyer_can_approve(self):
+        """Test that only the buyer can approve a milestone"""
+        self.client.force_authenticate(user=self.seller)
+        
+        self.milestone.status = Milestone.MilestoneStatus.AWAITING_REVIEW
+        self.milestone.save()
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/approve/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_request_revision(self):
+        """Test buyer requesting revision"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Set milestone to awaiting review
+        self.milestone.status = Milestone.MilestoneStatus.AWAITING_REVIEW
+        self.milestone.save()
+        
+        response = self.client.post(f'/api/milestones/{self.milestone.id}/request_revision/')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreater(len(response.data), 0)
+        self.assertEqual(response.data['status'], 'REVISION_REQUESTED')
+
+    def test_complete_all_milestones_completes_transaction(self):
+        """Test that completing all milestones marks transaction as completed"""
+        self.client.force_authenticate(user=self.buyer)
         
-        seller = response.data[0]
-        self.assertIsInstance(seller['skills'], list)
-        self.assertGreater(len(seller['skills']), 0)
+        # Create another milestone
+        milestone2 = Milestone.objects.create(
+            transaction=self.transaction,
+            title='Milestone 2',
+            value=Decimal('50.00'),
+            status=Milestone.MilestoneStatus.AWAITING_REVIEW
+        )
         
-        skill = seller['skills'][0]
-        self.assertIn('name', skill)
-        self.assertIn('slug', skill)
+        # Set first milestone to awaiting review and approve it
+        self.milestone.status = Milestone.MilestoneStatus.AWAITING_REVIEW
+        self.milestone.save()
+        self.client.post(f'/api/milestones/{self.milestone.id}/approve/')
+        
+        # Approve second milestone
+        self.client.post(f'/api/milestones/{milestone2.id}/approve/')
+        
+        # Check transaction is completed
+        self.transaction.refresh_from_db()
+        self.assertEqual(self.transaction.status, EscrowTransaction.TransactionStatus.COMPLETED)
+
+
+class WalletAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@test.com',
+            password='password123'
+        )
+        self.wallet = UserWallet.objects.create(
+            user=self.user,
+            balance=Decimal('500.00')
+        )
+
+    def test_view_wallet(self):
+        """Test viewing user's wallet"""
+        self.client.force_authenticate(user=self.user)
+        
+        response = self.client.get('/api/wallets/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(Decimal(response.data['results'][0]['balance']), Decimal('500.00'))
+
+    def test_cannot_view_other_user_wallet(self):
+        """Test that users can only view their own wallet"""
+        other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@test.com',
+            password='password123'
+        )
+        other_wallet = UserWallet.objects.create(
+            user=other_user,
+            balance=Decimal('1000.00')
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        
+        response = self.client.get('/api/wallets/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+        # Should only see own wallet
+        self.assertEqual(response.data['results'][0]['user']['id'], self.user.id)

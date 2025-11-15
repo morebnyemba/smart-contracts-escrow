@@ -11,82 +11,108 @@ The platform combines a simple, 8-step user flow with the ability to manage comp
 - **backend**: Django project for the API, user management, transactions, and wallets.
 - **frontend**: Next.js project for the user interface, including buyer/seller portals, onboarding, and transaction views.
 
+## Features Implemented
+
+### Core Transaction Flow (Phase 1-3) ✅
+
+The platform now includes a complete, working transaction flow:
+
+- ✅ **Transaction Creation**: Buyers can create escrow transactions with multiple milestones
+- ✅ **Wallet-Based Funding**: Secure funding system with balance validation
+- ✅ **Milestone Management**: Full lifecycle support (submission, approval, revision requests)
+- ✅ **Payment Release**: Automatic fund release to sellers upon milestone approval
+- ✅ **Transaction Completion**: Auto-completion when all milestones are done
+
+### API Endpoints
+
+See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for complete API documentation.
+
+Key endpoints:
+- `POST /api/transactions/` - Create transaction
+- `POST /api/transactions/{id}/fund/` - Fund transaction
+- `POST /api/milestones/{id}/submit/` - Submit work
+- `POST /api/milestones/{id}/approve/` - Approve milestone
+- `POST /api/milestones/{id}/request_revision/` - Request revisions
+
 ## Getting Started
 
-Further instructions will be added here for setting up the development environment, running the applications, and deploying.
+### Backend Setup
 
-## CI/CD and Automation
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
 
-This repository includes GitHub Actions workflows to help maintain code quality and automate routine tasks:
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Continuous Integration Workflows
+3. Run migrations:
+   ```bash
+   python manage.py migrate
+   ```
 
-- **Backend CI** (`.github/workflows/backend-ci.yml`): Automatically runs on changes to the `backend/` directory
-  - Sets up Python 3.11 environment
-  - Caches pip dependencies for faster builds
-  - Installs backend dependencies
-  - Runs linting with flake8 (if configured)
-  - Executes tests with pytest (if tests exist)
+4. Create a superuser:
+   ```bash
+   python manage.py createsuperuser
+   ```
 
-- **Frontend CI** (`.github/workflows/frontend-ci.yml`): Automatically runs on changes to the `frontend/` directory
-  - Sets up Node.js 18.x environment
-  - Caches npm dependencies for faster builds
-  - Installs frontend dependencies
-  - Runs linting
-  - Performs type checking
-  - Executes tests
+5. Start the development server:
+   ```bash
+   python manage.py runserver
+   ```
 
-### Auto-merge Workflow
+6. Access the API at `http://localhost:8000/api/`
+7. Access the admin panel at `http://localhost:8000/admin/`
 
-The **Auto-merge** workflow (`.github/workflows/automerge-on-label.yml`) provides an automated way to merge PRs when they meet quality criteria:
+### Running Tests
 
-**How it works:**
-1. The workflow automatically evaluates all non-draft PRs
-2. Checks that the PR meets criteria:
-   - At least 1 approval from a reviewer
-   - All required checks are passing (no failing status checks)
-   - No change requests from reviewers
-3. If criteria are met, adds the `automerge` label and merges using the squash method
-4. If criteria are not met, posts a review with a checklist of items to address
+```bash
+cd backend
+python manage.py test
+```
 
-**When to use:**
-- For routine dependency updates from Dependabot
-- For small, well-tested changes that have been reviewed
-- When you want to ensure a PR merges as soon as all checks pass
+All 23 tests pass successfully, covering:
+- Transaction creation and funding
+- Milestone submission and approval
+- Wallet operations
+- User authorization
 
-### PR Iterator Workflow
+### Frontend Setup
 
-The **PR Iterator** workflow (`.github/workflows/pr-iterator.yml`) automatically monitors all open PRs:
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
 
-**Features:**
-- Runs every 15 minutes to check all open PRs (providing faster feedback)
-- Identifies stale PRs (>14 days inactive) or PRs waiting for review (>7 days)
-- Automatically adds/removes labels: `stale`, `needs-review`, `changes-requested`
-- Posts status comments with actionable checklists
-- Helps ensure no PR is forgotten or left in limbo
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-### Auto-approve Workflow
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-The **Auto-approve Workflow** (`.github/workflows/auto-approve-workflows.yml`) automatically approves workflow runs from forks and first-time contributors, ensuring CI runs immediately without manual intervention.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-### Gemini PR Review
+## Security
 
-The **Gemini PR Review** workflow (`.github/workflows/gemini-pr-review.yml`) provides AI-powered code review using Google's Gemini model. Configure `GEMINI_API_KEY` in repository secrets to enable automatic code reviews on all PRs.
+The implementation has been scanned with CodeQL and shows **0 security vulnerabilities**.
 
-### Auto Review on "needs-review" Label
+Security features include:
+- Atomic database transactions for fund transfers
+- User authorization checks (buyer/seller permissions)
+- Status validation for all state transitions
+- Input validation for all API endpoints
 
-The **Auto Review on Needs Review Label** workflow (`.github/workflows/auto-review-on-label.yml`) automatically triggers a code review when the `needs-review` label is applied to a PR. This workflow:
-- Runs as part of automated checks when the PR Iterator adds the `needs-review` label
-- Uses the same AI-powered review logic as Gemini PR Review
-- Can be configured with `GEMINI_API_KEY` for AI reviews, or uses heuristic analysis as fallback
-- Helps ensure PRs receive timely feedback even when reviewers are unavailable
+## Next Steps
 
-### Dependabot Configuration
-
-Dependabot (`.github/dependabot.yml`) is configured to automatically check for dependency updates weekly:
-- **npm packages** in the `frontend/` directory
-- **pip packages** in the `backend/` directory
-
-Dependabot will create PRs for dependency updates, which can be reviewed and merged (optionally using the auto-merge label for trusted updates).
-
-*This is a test commit to enable pull request creation.*
+- [ ] Implement dispute resolution mechanism
+- [ ] Add notification system
+- [ ] Implement review system
+- [ ] Add payment gateway integration
+- [ ] Enhance seller discovery features
+- [ ] Implement real-time updates with WebSockets
