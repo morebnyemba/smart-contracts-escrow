@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction as db_transaction
 from django.shortcuts import get_object_or_404
+import logging
 
 from transactions.models import EscrowTransaction, Milestone, Review
 from wallets.models import UserWallet
@@ -14,6 +15,8 @@ from .serializers import (
     UserWalletSerializer,
     ReviewSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 class EscrowTransactionViewSet(viewsets.ModelViewSet):
@@ -90,6 +93,14 @@ class EscrowTransactionViewSet(viewsets.ModelViewSet):
             # Update transaction status
             transaction_obj.status = EscrowTransaction.TransactionStatus.IN_ESCROW
             transaction_obj.save()
+            
+            # Send signal for transaction funded
+            transaction_funded.send(
+                sender=self.__class__,
+                transaction=transaction_obj,
+                buyer=transaction_obj.buyer,
+                seller=transaction_obj.seller
+            )
         
         serializer = self.get_serializer(transaction_obj)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -247,6 +258,14 @@ class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
             if all_completed:
                 transaction_obj.status = EscrowTransaction.TransactionStatus.COMPLETED
                 transaction_obj.save()
+            
+            # Send signal for milestone approved
+            milestone_approved.send(
+                sender=self.__class__,
+                milestone=milestone,
+                buyer=transaction_obj.buyer,
+                seller=transaction_obj.seller
+            )
         
         serializer = self.get_serializer(milestone)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -276,6 +295,61 @@ class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):
         # Update milestone status
         milestone.status = Milestone.MilestoneStatus.REVISION_REQUESTED
         milestone.save()
+        
+        # Send signal for revision requested
+        revision_requested.send(
+            sender=self.__class__,
+            milestone=milestone,
+            buyer=transaction_obj.buyer,
+            seller=transaction_obj.seller
+        )
+        
+        serializer = self.get_serializer(milestone)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'])
+    def dispute(self, request, pk=None):
+        """
+        Buyer opens a dispute for a milestone.
+        """
+        milestone = self.get_object()
+        transaction_obj = milestone.transaction
+        
+        # Validate buyer
+        if transaction_obj.buyer != request.user:
+            return Response(
+                {'error': 'Only the buyer can open a dispute for this milestone.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Validate milestone status - can't dispute an already completed or disputed milestone
+        if milestone.status == Milestone.MilestoneStatus.COMPLETED:
+            return Response(
+                {'error': 'Cannot dispute a completed milestone.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if milestone.status == Milestone.MilestoneStatus.DISPUTED:
+            return Response(
+                {'error': 'This milestone is already disputed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update milestone and transaction status
+        with db_transaction.atomic():
+            milestone.status = Milestone.MilestoneStatus.DISPUTED
+            milestone.save()
+            
+            transaction_obj.status = EscrowTransaction.TransactionStatus.DISPUTED
+            transaction_obj.save()
+            
+            # Notify admin - using logging for now, can be replaced with proper notification system
+            logger.warning(
+                f'DISPUTE OPENED: Transaction {transaction_obj.id} - Milestone {milestone.id}. '
+                f'Buyer: {transaction_obj.buyer.username} (ID: {transaction_obj.buyer.id}), '
+                f'Seller: {transaction_obj.seller.username} (ID: {transaction_obj.seller.id}). '
+                f'Admin mediation required.'
+            )
         
         serializer = self.get_serializer(milestone)
         return Response(serializer.data, status=status.HTTP_200_OK)

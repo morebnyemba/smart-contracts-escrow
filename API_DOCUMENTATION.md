@@ -16,6 +16,112 @@ All API endpoints require authentication. The API uses Django REST Framework's S
 
 ## API Endpoints
 
+### Portal Endpoints
+
+Portal endpoints provide specialized views for buyers and sellers to manage their transactions.
+
+#### Buyer Dashboard
+
+Get all transactions where the authenticated user is the buyer.
+
+**Endpoint:** `GET /api/portal/my-transactions/`
+
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- Returns only transactions where the authenticated user is the buyer
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+#### Seller Dashboard
+
+Get all transactions where the authenticated user is the seller.
+
+**Endpoint:** `GET /api/portal/seller/`
+
+**Authorization:** Requires authentication
+
+**Response:** (200 OK)
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Website Development Project",
+      "total_value": "800.00",
+      "buyer": 1,
+      "buyer_name": "buyer_user",
+      "seller": 2,
+      "seller_name": "seller_user",
+      "status": "IN_ESCROW",
+      "created_at": "2025-11-13T15:00:00Z",
+      "milestones": [
+        {
+          "id": 1,
+          "title": "Design Phase",
+          "description": "Create initial designs",
+          "value": "300.00",
+          "status": "PENDING",
+          "submission_details": ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- Returns only transactions where the authenticated user is the seller
+- Includes milestone details for each transaction
+- Shows buyer and seller information
+- Ordered by most recent first
+- Supports pagination
+
+**Retrieve Individual Transaction:**
+
+Sellers can retrieve details of a specific transaction:
+
+**Endpoint:** `GET /api/portal/seller/{id}/`
+
+**Response:** (200 OK) - Returns single transaction object
+
 ### Transactions
 
 #### Create Transaction
@@ -129,6 +235,35 @@ Get details of a specific transaction.
   "milestones": [...]
 }
 ```
+
+#### Accept Transaction
+
+Seller accepts the transaction terms, moving it from PENDING_FUNDING to AWAITING_PAYMENT status.
+
+**Endpoint:** `POST /api/transactions/{id}/accept/`
+
+**Authorization:** Only the seller can accept the transaction.
+
+**Preconditions:**
+- Transaction status must be `PENDING_FUNDING`
+
+**Response:** (200 OK)
+```json
+{
+  "id": 1,
+  "title": "Website Development Project",
+  "total_value": "800.00",
+  "status": "AWAITING_PAYMENT",
+  ...
+}
+```
+
+**Side Effects:**
+- Both buyer and seller are notified of the status change
+
+**Error Responses:**
+- `403 Forbidden`: User is not the seller
+- `400 Bad Request`: Invalid transaction status
 
 #### Fund Transaction
 
@@ -264,6 +399,38 @@ Buyer requests revision on submitted work.
 }
 ```
 
+#### Open Dispute
+
+Buyer opens a dispute on a milestone, triggering admin mediation.
+
+**Endpoint:** `POST /api/milestones/{id}/dispute/`
+
+**Authorization:** Only the buyer can open disputes.
+
+**Preconditions:**
+- Milestone status must NOT be `COMPLETED` or already `DISPUTED`
+
+**Response:** (200 OK)
+```json
+{
+  "id": 1,
+  "transaction": 1,
+  "title": "Design Phase",
+  "value": "300.00",
+  "status": "DISPUTED",
+  "submission_details": "Design mockups completed..."
+}
+```
+
+**Side Effects:**
+- Milestone status changes to `DISPUTED`
+- Parent transaction status changes to `DISPUTED`
+- Admin is notified for mediation
+
+**Error Responses:**
+- `403 Forbidden`: User is not the buyer
+- `400 Bad Request`: Milestone is already completed or disputed
+
 ### Wallets
 
 #### View Wallet
@@ -355,7 +522,7 @@ Submit a review for a completed transaction. Both buyer and seller can leave rev
 1. `PENDING_FUNDING` - Initial state after creation
 2. `IN_ESCROW` - After buyer funds the transaction
 3. `COMPLETED` - All milestones completed
-4. `DISPUTED` - Transaction disputed (future feature)
+4. `DISPUTED` - Buyer opened a dispute, requires admin mediation
 5. `CLOSED` - Transaction closed (future feature)
 
 ### Milestone Status Flow
@@ -364,7 +531,7 @@ Submit a review for a completed transaction. Both buyer and seller can leave rev
 2. `AWAITING_REVIEW` - Seller submitted work
 3. `REVISION_REQUESTED` - Buyer requests changes
 4. `COMPLETED` - Buyer approved, payment released
-5. `DISPUTED` - Milestone disputed (future feature)
+5. `DISPUTED` - Buyer opened a dispute, requires admin mediation
 
 ## Error Handling
 
@@ -388,29 +555,52 @@ Error responses include descriptive messages:
 
 ## Example Usage Flow
 
+### Happy Path
+
 1. **Buyer creates transaction**
    ```
    POST /api/transactions/
    ```
 
-2. **Buyer funds transaction**
+2. **Seller accepts transaction**
+   ```
+   POST /api/transactions/1/accept/
+   ```
+
+3. **Buyer funds transaction**
    ```
    POST /api/transactions/1/fund/
    ```
 
-3. **Seller submits work**
+4. **Seller submits work**
    ```
    POST /api/milestones/1/submit/
    ```
 
-4. **Buyer approves milestone**
+5. **Buyer approves milestone**
    ```
    POST /api/milestones/1/approve/
    ```
 
-5. **Repeat steps 3-4 for all milestones**
+6. **Repeat steps 4-5 for all milestones**
 
-6. **Transaction automatically completes when all milestones are done**
+7. **Transaction automatically completes when all milestones are done**
+
+### Dispute Flow
+
+1. **Buyer creates and funds transaction** (steps 1-2 from happy path)
+
+2. **Seller submits work**
+   ```
+   POST /api/milestones/1/submit/
+   ```
+
+3. **Buyer opens dispute** (if not satisfied with work)
+   ```
+   POST /api/milestones/1/dispute/
+   ```
+
+4. **Admin is notified and begins mediation**
 
 7. **Buyer and seller leave reviews**
    ```

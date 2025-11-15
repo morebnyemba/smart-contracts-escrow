@@ -23,3 +23,23 @@ class BuyerTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         return EscrowTransaction.objects.filter(
             buyer=self.request.user
         ).prefetch_related('milestones').select_related('buyer', 'seller').order_by('-created_at')
+
+
+class SellerTransactionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for sellers to view their transactions.
+    
+    Provides list and retrieve actions for transactions where the
+    authenticated user is the seller.
+    """
+    serializer_class = TransactionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """
+        Return only transactions where the current user is the seller.
+        Orders by most recent first.
+        """
+        return EscrowTransaction.objects.filter(
+            seller=self.request.user
+        ).prefetch_related('milestones').select_related('buyer', 'seller').order_by('-created_at')
