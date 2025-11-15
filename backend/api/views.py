@@ -6,14 +6,14 @@ from django.db import transaction as db_transaction
 from django.shortcuts import get_object_or_404
 import logging
 
-from transactions.models import EscrowTransaction, Milestone
-from transactions.signals import milestone_approved, transaction_funded, revision_requested
+from transactions.models import EscrowTransaction, Milestone, Review
 from wallets.models import UserWallet
 from .serializers import (
     EscrowTransactionSerializer,
     EscrowTransactionCreateSerializer,
     MilestoneSerializer,
-    UserWalletSerializer
+    UserWalletSerializer,
+    ReviewSerializer
 )
 
 logger = logging.getLogger(__name__)
@@ -106,47 +106,57 @@ class EscrowTransactionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
-    def accept(self, request, pk=None):
+    def leave_review(self, request, pk=None):
         """
-        Seller accepts a transaction, moving it from PENDING_FUNDING to AWAITING_PAYMENT.
+        Leave a review for a transaction.
+        Both buyer and seller can leave reviews.
         """
         transaction_obj = self.get_object()
         
-        # Validate seller
-        if transaction_obj.seller != request.user:
+        # Validate that user is buyer or seller
+        if transaction_obj.buyer != request.user and transaction_obj.seller != request.user:
             return Response(
-                {'error': 'Only the seller can accept this transaction.'},
+                {'error': 'Only the buyer or seller can leave a review for this transaction.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Validate transaction status
-        if transaction_obj.status != EscrowTransaction.TransactionStatus.PENDING_FUNDING:
+        # Check if user has already reviewed
+        existing_review = Review.objects.filter(
+            transaction=transaction_obj,
+            reviewer=request.user
+        ).first()
+        
+        if existing_review:
             return Response(
-                {'error': f'Transaction cannot be accepted in {transaction_obj.status} status.'},
+                {'error': 'You have already left a review for this transaction.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Update transaction status
-        transaction_obj.status = EscrowTransaction.TransactionStatus.AWAITING_PAYMENT
-        transaction_obj.save()
+        # Validate transaction status - must be COMPLETED or CLOSED
+        if transaction_obj.status not in [
+            EscrowTransaction.TransactionStatus.COMPLETED,
+            EscrowTransaction.TransactionStatus.CLOSED
+        ]:
+            return Response(
+                {'error': 'Reviews can only be left for completed transactions.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        # Notify buyer and seller
-        # TODO: Replace with actual notification system (email, websocket, etc.)
-        self._notify_transaction_accepted(transaction_obj)
+        # Create the review
+        serializer = ReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            review = serializer.save(
+                transaction=transaction_obj,
+                reviewer=request.user
+            )
+            
+            # Update transaction status to CLOSED after review is submitted
+            transaction_obj.status = EscrowTransaction.TransactionStatus.CLOSED
+            transaction_obj.save()
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         
-        serializer = self.get_serializer(transaction_obj)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    def _notify_transaction_accepted(self, transaction_obj):
-        """
-        Notify buyer and seller that the transaction has been accepted.
-        This is a placeholder for future notification implementation.
-        """
-        # Placeholder for notification logic
-        # In production, this would send emails, push notifications, or WebSocket messages
-        print(f"Notification: Transaction '{transaction_obj.title}' (ID: {transaction_obj.id}) has been accepted by seller.")
-        print(f"  - Buyer ({transaction_obj.buyer.username}) notified")
-        print(f"  - Seller ({transaction_obj.seller.username}) notified")
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class MilestoneViewSet(viewsets.ReadOnlyModelViewSet):

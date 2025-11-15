@@ -457,6 +457,64 @@ Get the authenticated user's wallet information.
 }
 ```
 
+### Reviews
+
+#### Leave Review
+
+Submit a review for a completed transaction. Both buyer and seller can leave reviews.
+
+**Endpoint:** `POST /api/transactions/{id}/leave_review/`
+
+**Authorization:** Only the buyer or seller of the transaction can leave a review.
+
+**Request Body:**
+```json
+{
+  "rating": 5,
+  "comment": "Great work! Very professional and delivered on time."
+}
+```
+
+**Preconditions:**
+- Transaction status must be `COMPLETED` or `CLOSED`
+- User must be either the buyer or seller
+- User has not already reviewed this transaction
+
+**Response:** (201 Created)
+```json
+{
+  "id": 1,
+  "transaction": 1,
+  "reviewer": {
+    "id": 1,
+    "username": "buyer_user",
+    "email": "buyer@example.com",
+    "first_name": "John",
+    "last_name": "Doe"
+  },
+  "rating": 5,
+  "comment": "Great work! Very professional and delivered on time.",
+  "created_at": "2025-11-15T10:00:00Z"
+}
+```
+
+**Side Effects:**
+- Transaction status changes to `CLOSED`
+
+**Error Responses:**
+- `400 Bad Request`: 
+  - Rating not between 1-5
+  - User has already reviewed this transaction
+  - Transaction is not in COMPLETED status
+- `404 Not Found`: Transaction doesn't exist or user is not involved in it
+
+**Notes:**
+- The `comment` field is optional
+- Rating must be an integer between 1 and 5 (inclusive)
+- Each user (buyer and seller) can only leave one review per transaction
+- Transaction status changes to CLOSED after the first review is submitted
+- Both parties can still leave reviews even after status is CLOSED
+
 ## Status Flow
 
 ### Transaction Status Flow
@@ -543,6 +601,13 @@ Error responses include descriptive messages:
    ```
 
 4. **Admin is notified and begins mediation**
+
+7. **Buyer and seller leave reviews**
+   ```
+   POST /api/transactions/1/leave_review/
+   ```
+
+8. **Transaction automatically closes after first review is submitted**
 
 ## Testing
 

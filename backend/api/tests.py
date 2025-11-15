@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from decimal import Decimal
 
-from transactions.models import EscrowTransaction, Milestone
+from transactions.models import EscrowTransaction, Milestone, Review
 from wallets.models import UserWallet
 
 User = get_user_model()
@@ -440,3 +440,174 @@ class WalletAPITest(TestCase):
         # Should only see own wallet
         self.assertEqual(response.data['results'][0]['user']['id'], self.user.id)
 
+
+class ReviewAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.buyer = User.objects.create_user(
+            username='buyer',
+            email='buyer@test.com',
+            password='password123'
+        )
+        self.seller = User.objects.create_user(
+            username='seller',
+            email='seller@test.com',
+            password='password123'
+        )
+        
+        # Create a completed transaction
+        self.transaction = EscrowTransaction.objects.create(
+            title='Test Project',
+            total_value=Decimal('100.00'),
+            buyer=self.buyer,
+            seller=self.seller,
+            status=EscrowTransaction.TransactionStatus.COMPLETED
+        )
+
+    def test_buyer_can_leave_review(self):
+        """Test that buyer can leave a review"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        data = {
+            'rating': 5,
+            'comment': 'Great work! Very satisfied.'
+        }
+        
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['rating'], 5)
+        self.assertEqual(response.data['comment'], 'Great work! Very satisfied.')
+        self.assertEqual(response.data['reviewer']['id'], self.buyer.id)
+        
+        # Check transaction status changed to CLOSED
+        self.transaction.refresh_from_db()
+        self.assertEqual(self.transaction.status, EscrowTransaction.TransactionStatus.CLOSED)
+
+    def test_seller_can_leave_review(self):
+        """Test that seller can leave a review"""
+        self.client.force_authenticate(user=self.seller)
+        
+        data = {
+            'rating': 4,
+            'comment': 'Good buyer, prompt payment.'
+        }
+        
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['rating'], 4)
+        self.assertEqual(response.data['reviewer']['id'], self.seller.id)
+
+    def test_review_without_comment(self):
+        """Test that review can be left without a comment"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        data = {
+            'rating': 3
+        }
+        
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['rating'], 3)
+        self.assertEqual(response.data['comment'], '')
+
+    def test_cannot_review_twice(self):
+        """Test that a user cannot review the same transaction twice"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        data = {
+            'rating': 5,
+            'comment': 'First review'
+        }
+        
+        # Leave first review
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Try to leave second review
+        data['comment'] = 'Second review'
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already left a review', response.data['error'])
+
+    def test_invalid_rating(self):
+        """Test that invalid ratings are rejected"""
+        self.client.force_authenticate(user=self.buyer)
+        
+        # Test rating too low
+        data = {'rating': 0}
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # Test rating too high
+        data = {'rating': 6}
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_only_buyer_or_seller_can_review(self):
+        """Test that only buyer or seller can review a transaction"""
+        other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@test.com',
+            password='password123'
+        )
+        self.client.force_authenticate(user=other_user)
+        
+        data = {'rating': 5}
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        
+        # Returns 404 because the transaction is not in the user's queryset
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_review_incomplete_transaction(self):
+        """Test that reviews can only be left for completed transactions"""
+        # Change transaction to IN_ESCROW status
+        self.transaction.status = EscrowTransaction.TransactionStatus.IN_ESCROW
+        self.transaction.save()
+        
+        self.client.force_authenticate(user=self.buyer)
+        
+        data = {'rating': 5}
+        response = self.client.post(
+            f'/api/transactions/{self.transaction.id}/leave_review/',
+            data,
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('completed transactions', response.data['error'])
