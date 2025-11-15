@@ -1,100 +1,63 @@
 # API Documentation
 
-## Buyer Portal API Endpoints
+## Seller Search Endpoint
 
-### My Transactions
+### Search Sellers by Skill
 
-Retrieve transactions where the authenticated user is the buyer.
+Search for verified sellers that have a specific skill.
 
-#### List Transactions
+**Endpoint:** `GET /api/sellers/search/`
 
-**Endpoint:** `GET /api/buyer/my-transactions/`
+**Query Parameters:**
+- `skill` (required): The slug of the skill/service category to filter by
 
-**Authentication:** Required (Session-based)
-
-**Permissions:** IsAuthenticated
-
-**Response:**
+**Response Format:**
 ```json
-{
-  "count": 1,
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "title": "Website Development Project",
-      "total_value": "2500.00",
-      "buyer": 1,
-      "buyer_name": "john_buyer",
-      "seller": 2,
-      "seller_name": "jane_seller",
-      "status": "IN_ESCROW",
-      "created_at": "2025-11-13T15:24:00Z",
-      "milestones": [
-        {
-          "id": 1,
-          "title": "Design Phase",
-          "description": "Complete UI/UX design",
-          "value": "800.00",
-          "status": "COMPLETED",
-          "submission_details": ""
-        },
-        {
-          "id": 2,
-          "title": "Development Phase",
-          "description": "Build frontend and backend",
-          "value": "1700.00",
-          "status": "PENDING",
-          "submission_details": ""
-        }
-      ]
-    }
-  ]
-}
+[
+  {
+    "public_seller_id": "uuid",
+    "username": "string",
+    "account_type": "INDIVIDUAL|COMPANY",
+    "company_name": "string|null",
+    "verification_status": "VERIFIED",
+    "skills": [
+      {
+        "name": "string",
+        "slug": "string"
+      }
+    ]
+  }
+]
 ```
 
-**Features:**
-- Returns transactions ordered by most recent first
-- Includes nested milestone details
-- Pagination enabled (20 items per page)
-- Only returns transactions where the user is the buyer
+**Example Requests:**
 
-#### Retrieve Transaction Detail
+Search for web developers:
+```bash
+curl "http://localhost:8000/api/sellers/search/?skill=web-development"
+```
 
-**Endpoint:** `GET /api/buyer/my-transactions/{id}/`
+Search for mobile developers:
+```bash
+curl "http://localhost:8000/api/sellers/search/?skill=mobile-development"
+```
 
-**Authentication:** Required (Session-based)
-
-**Permissions:** IsAuthenticated
-
-**Response:** Same as individual transaction object in list view
+**Success Response:**
+- **Status Code:** 200 OK
+- **Body:** Array of seller profiles matching the skill
 
 **Error Responses:**
-- `403 Forbidden`: User is not authenticated
-- `404 Not Found`: Transaction doesn't exist or user is not the buyer
 
-#### Transaction Status Values
+Missing skill parameter:
+- **Status Code:** 400 Bad Request
+- **Body:** `{"error": "skill query parameter is required"}`
 
-- `PENDING_FUNDING`: Awaiting initial funding
-- `AWAITING_PAYMENT`: Waiting for payment
-- `IN_ESCROW`: Funds are in escrow
-- `WORK_IN_PROGRESS`: Work is being done
-- `COMPLETED`: Transaction completed
-- `DISPUTED`: Transaction is disputed
-- `CLOSED`: Transaction closed
+Skill not found:
+- **Status Code:** 404 Not Found
+- **Body:** `{"error": "Skill \"<skill_slug>\" not found"}`
 
-#### Milestone Status Values
-
-- `PENDING`: Milestone not started
-- `AWAITING_REVIEW`: Submitted for review
-- `REVISION_REQUESTED`: Needs revisions
-- `COMPLETED`: Milestone completed
-- `DISPUTED`: Milestone disputed
-
-## Security
-
-- All endpoints require authentication
-- Users can only access their own transactions
-- Endpoints are read-only (POST/PUT/DELETE not allowed)
-- Cross-buyer access is prevented
+**Notes:**
+- Only VERIFIED sellers are returned in the search results
+- Sellers with UNVERIFIED or PENDING verification status are excluded
+- Results include all sellers who have the specified skill, even if they have additional skills
+- The endpoint uses optimized database queries for performance
