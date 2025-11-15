@@ -8,6 +8,11 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+    
+    @property
+    def is_seller(self):
+        """Check if user has a seller profile"""
+        return hasattr(self, 'seller_profile')
 
 class ServiceCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
