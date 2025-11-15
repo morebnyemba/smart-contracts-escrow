@@ -1,7 +1,11 @@
 from django.contrib import admin
+from django.contrib import messages
 from django.utils import timezone
+import logging
 from .models import CustomUser, ServiceCategory, SellerProfile
 from .tasks import send_verification_notification
+
+logger = logging.getLogger(__name__)
 
 @admin.register(ServiceCategory)
 class ServiceCategoryAdmin(admin.ModelAdmin):
@@ -51,6 +55,7 @@ class SellerProfileAdmin(admin.ModelAdmin):
                     verification_status='VERIFIED'
                 )
             except Exception as e:
+                logger.error(f'Failed to send approval notification to user {seller_profile.user.id}: {e}')
                 failed_notifications += 1
             count += 1
         
@@ -58,7 +63,7 @@ class SellerProfileAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f'{count} seller profile(s) have been approved, but {failed_notifications} notification(s) failed to send.',
-                level='warning'
+                level=messages.WARNING
             )
         else:
             self.message_user(
@@ -83,6 +88,7 @@ class SellerProfileAdmin(admin.ModelAdmin):
                     verification_status='REJECTED'
                 )
             except Exception as e:
+                logger.error(f'Failed to send rejection notification to user {seller_profile.user.id}: {e}')
                 failed_notifications += 1
             count += 1
         
@@ -90,7 +96,7 @@ class SellerProfileAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f'{count} seller profile(s) have been rejected, but {failed_notifications} notification(s) failed to send.',
-                level='warning'
+                level=messages.WARNING
             )
         else:
             self.message_user(
