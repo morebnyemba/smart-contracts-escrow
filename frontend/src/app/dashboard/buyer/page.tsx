@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import styles from './buyer.module.css';
+import { transactionAPI } from '@/lib/api';
 
 interface Transaction {
-  id: string;
+  id: string | number;
   title: string;
   status: string;
   total_value: number;
@@ -19,56 +20,45 @@ export default function BuyerPortal() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    // Simulate fetching buyer's transactions
-    const dummyTransactions: Transaction[] = [
-      {
-        id: 'tx-001',
-        title: 'Website Redesign Project',
-        status: 'AWAITING_REVIEW',
-        total_value: 5000,
-        seller: { id: 2, username: 'webdesigner_pro' },
-        created_at: '2025-11-01',
-        milestones_completed: 2,
-        total_milestones: 4,
-      },
-      {
-        id: 'tx-002',
-        title: 'Mobile App Development',
-        status: 'IN_PROGRESS',
-        total_value: 12000,
-        seller: { id: 3, username: 'app_developer' },
-        created_at: '2025-10-15',
-        milestones_completed: 1,
-        total_milestones: 6,
-      },
-      {
-        id: 'tx-003',
-        title: 'Logo Design',
-        status: 'COMPLETED',
-        total_value: 500,
-        seller: { id: 4, username: 'creative_designer' },
-        created_at: '2025-10-01',
-        milestones_completed: 2,
-        total_milestones: 2,
-      },
-      {
-        id: 'tx-004',
-        title: 'E-commerce Platform',
-        status: 'IN_ESCROW',
-        total_value: 8000,
-        seller: { id: 5, username: 'fullstack_dev' },
-        created_at: '2025-11-10',
-        milestones_completed: 0,
-        total_milestones: 5,
-      },
-    ];
-    
-    setTimeout(() => {
-      setTransactions(dummyTransactions);
-      setLoading(false);
-    }, 500);
+    const fetchTransactions = async () => {
+      try {
+        const response = await transactionAPI.getAll();
+        
+        if (response.error) {
+          setError(response.error);
+          setLoading(false);
+          return;
+        }
+
+        if (response.data) {
+          // Map API response to component interface
+          const mappedTransactions = response.data.results.map(tx => {
+            const completedMilestones = tx.milestones.filter(m => m.status === 'COMPLETED').length;
+            return {
+              id: tx.id,
+              title: tx.title,
+              status: tx.status,
+              total_value: parseFloat(tx.total_value),
+              seller: tx.seller,
+              created_at: new Date(tx.created_at).toLocaleDateString(),
+              milestones_completed: completedMilestones,
+              total_milestones: tx.milestones.length,
+            };
+          });
+          setTransactions(mappedTransactions);
+        }
+      } catch (err) {
+        setError('Failed to fetch transactions');
+        console.error('Error fetching transactions:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
   }, []);
 
   const filteredTransactions = transactions.filter((tx) => {
@@ -107,6 +97,14 @@ export default function BuyerPortal() {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>Loading your dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.error}>{error}</div>
       </div>
     );
   }

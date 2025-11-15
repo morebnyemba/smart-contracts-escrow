@@ -1,24 +1,87 @@
 import { MilestoneListProps } from '@/types/transaction';
+import { milestoneAPI } from '@/lib/api';
+import { useState } from 'react';
 
 export function MilestoneList({ milestones, isBuyer, isSeller }: MilestoneListProps) {
+    const [processing, setProcessing] = useState<number | null>(null);
+    const [error, setError] = useState<string>('');
     
     const handleApprove = async (milestoneId: number) => {
-        // const store = useTransactionStore();
-        // await api.post(`/api/milestones/${milestoneId}/approve/`);
-        // store.fetchTransaction(milestone.transaction_id);
-        console.log('Approving milestone:', milestoneId);
+        setProcessing(milestoneId);
+        setError('');
+        
+        try {
+            const response = await milestoneAPI.approve(milestoneId);
+            
+            if (response.error) {
+                setError(response.error);
+            } else {
+                // Reload page to reflect changes
+                window.location.reload();
+            }
+        } catch (err) {
+            setError('Failed to approve milestone');
+            console.error('Error approving milestone:', err);
+        } finally {
+            setProcessing(null);
+        }
     };
 
     const handleSubmitWork = async (milestoneId: number) => {
-        // Implementation will be added
-        console.log('Submitting work for milestone:', milestoneId);
+        const submissionDetails = prompt('Please enter details about your work submission:');
+        
+        if (!submissionDetails) {
+            return; // User cancelled
+        }
+        
+        setProcessing(milestoneId);
+        setError('');
+        
+        try {
+            const response = await milestoneAPI.submitWork(milestoneId, submissionDetails);
+            
+            if (response.error) {
+                setError(response.error);
+            } else {
+                // Reload page to reflect changes
+                window.location.reload();
+            }
+        } catch (err) {
+            setError('Failed to submit work');
+            console.error('Error submitting work:', err);
+        } finally {
+            setProcessing(null);
+        }
     };
 
     const handleRequestRevision = async (milestoneId: number) => {
-        console.log('Requesting revision for milestone:', milestoneId);
+        if (!confirm('Are you sure you want to request revision for this milestone?')) {
+            return;
+        }
+        
+        setProcessing(milestoneId);
+        setError('');
+        
+        try {
+            const response = await milestoneAPI.requestRevision(milestoneId);
+            
+            if (response.error) {
+                setError(response.error);
+            } else {
+                // Reload page to reflect changes
+                window.location.reload();
+            }
+        } catch (err) {
+            setError('Failed to request revision');
+            console.error('Error requesting revision:', err);
+        } finally {
+            setProcessing(null);
+        }
     };
 
     const handleOpenDispute = async (milestoneId: number) => {
+        // Dispute functionality not yet implemented in backend API
+        alert('Dispute functionality is not yet available. This feature will be added in a future update.');
         console.log('Opening dispute for milestone:', milestoneId);
     };
 
@@ -56,6 +119,11 @@ export function MilestoneList({ milestones, isBuyer, isSeller }: MilestoneListPr
 
     return (
         <div className="space-y-4">
+            {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                    {error}
+                </div>
+            )}
             {milestones.map((milestone, index) => (
                 <div
                     key={milestone.id}
@@ -86,19 +154,22 @@ export function MilestoneList({ milestones, isBuyer, isSeller }: MilestoneListPr
                         <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap gap-2">
                             <button
                                 onClick={() => handleApprove(milestone.id)}
-                                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                                disabled={processing === milestone.id}
+                                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                ✓ Approve & Release {formatCurrency(milestone.value)}
+                                {processing === milestone.id ? 'Processing...' : `✓ Approve & Release ${formatCurrency(milestone.value)}`}
                             </button>
                             <button
                                 onClick={() => handleRequestRevision(milestone.id)}
-                                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                                disabled={processing === milestone.id}
+                                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Request Revision
+                                {processing === milestone.id ? 'Processing...' : 'Request Revision'}
                             </button>
                             <button
                                 onClick={() => handleOpenDispute(milestone.id)}
-                                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                                disabled={processing === milestone.id}
+                                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Open Dispute
                             </button>
@@ -110,9 +181,10 @@ export function MilestoneList({ milestones, isBuyer, isSeller }: MilestoneListPr
                         <div className="mt-4 pt-4 border-t border-gray-200">
                             <button
                                 onClick={() => handleSubmitWork(milestone.id)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                                disabled={processing === milestone.id}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Submit Work for this Milestone
+                                {processing === milestone.id ? 'Submitting...' : 'Submit Work for this Milestone'}
                             </button>
                         </div>
                     )}
@@ -123,9 +195,10 @@ export function MilestoneList({ milestones, isBuyer, isSeller }: MilestoneListPr
                             </p>
                             <button
                                 onClick={() => handleSubmitWork(milestone.id)}
-                                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                                disabled={processing === milestone.id}
+                                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Re-submit Work
+                                {processing === milestone.id ? 'Submitting...' : 'Re-submit Work'}
                             </button>
                         </div>
                     )}

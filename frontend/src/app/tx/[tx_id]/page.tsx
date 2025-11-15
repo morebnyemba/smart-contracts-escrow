@@ -1,58 +1,67 @@
 'use client';
 
 import { TransactionView } from '@/components/transactions/TransactionView';
-import { useTransactionStore } from '@/store/transactionStore';
 import { useUserStore } from '@/store/userStore';
-import { useEffect, useState, use } from 'react';
-
-interface TransactionPageProps {
-    params: Promise<{
-        tx_id: string;
-    }>;
-}
+import { useEffect, useState } from 'react';
+import { transactionAPI } from '@/lib/api';
+import { Transaction as ApiTransaction } from '@/lib/api';
+import { Transaction, Milestone } from '@/types/transaction';
 
 export default function TransactionPage({ params }: { params: { tx_id: string } }) {
     const { tx_id } = params;
     const { user } = useUserStore();
-    const { activeTransaction, milestones, fetchTransaction } = useTransactionStore();
+    const [transaction, setTransaction] = useState<Transaction | null>(null);
+    const [milestones, setMilestones] = useState<Milestone[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string>('');
 
     useEffect(() => {
-        if (tx_id) {
-            fetchTransaction(tx_id).finally(() => setIsLoading(false));
-        }
-    }, [tx_id, fetchTransaction]);
+        const fetchTransaction = async () => {
+            if (!tx_id) return;
 
-    // Mock user for demo purposes
-    useEffect(() => {
-        if (!user) {
-            // Check if we should simulate a seller (for demo purposes)
-            const urlParams = new URLSearchParams(window.location.search);
-            const userType = urlParams.get('as');
-            
-            // Simulate logged in user (buyer by default, seller if ?as=seller)
-            const mockUser = userType === 'seller' 
-                ? { 
-                    id: 2, 
-                    username: "seller_user",
-                    email: "seller@example.com",
-                    first_name: "Seller",
-                    last_name: "User",
-                    is_seller: true
-                  }
-                : { 
-                    id: 1, 
-                    username: "buyer_user",
-                    email: "buyer@example.com",
-                    first_name: "Buyer",
-                    last_name: "User",
-                    is_seller: false
-                  };
-            useUserStore.getState().login("mock-access-token", "mock-refresh-token", mockUser);
-        }
-    }, [user]);
+            try {
+                const response = await transactionAPI.getById(tx_id);
+                
+                if (response.error) {
+                    setError(response.error);
+                } else if (response.data) {
+                    // Map API response to component interface
+                    const apiTx: ApiTransaction = response.data;
+                    const mappedTx: Transaction = {
+                        id: apiTx.id,
+                        title: apiTx.title,
+                        description: apiTx.description,
+                        status: apiTx.status as Transaction['status'],
+                        total_value: parseFloat(apiTx.total_value),
+                        buyer: apiTx.buyer,
+                        seller: apiTx.seller,
+                        created_at: apiTx.created_at,
+                    };
+                    
+                    const mappedMilestones: Milestone[] = apiTx.milestones.map(m => ({
+                        id: m.id,
+                        title: m.title,
+                        description: m.description,
+                        value: parseFloat(m.value),
+                        status: m.status as Milestone['status'],
+                        transaction_id: apiTx.id,
+                    }));
+                    
+                    setTransaction(mappedTx);
+                    setMilestones(mappedMilestones);
+                }
+            } catch (err) {
+                setError('Failed to fetch transaction');
+                console.error('Error fetching transaction:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-    if (isLoading || !activeTransaction) {
+        fetchTransaction();
+    }, [tx_id]);
+
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
@@ -63,16 +72,44 @@ export default function TransactionPage({ params }: { params: { tx_id: string } 
         );
     }
 
-    if (!user) {
-        return <div className="flex items-center justify-center min-h-screen text-gray-600">Please log in to view this transaction.</div>;
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center text-red-600">
+                    <p className="text-xl font-semibold mb-2">Error</p>
+                    <p>{error}</p>
+                </div>
+            </div>
+        );
     }
 
-    const isBuyer = user.id === activeTransaction.buyer.id;
-    const isSeller = user.id === activeTransaction.seller.id;
+    if (!user) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center text-gray-600">
+                    <p className="text-xl font-semibold mb-2">Authentication Required</p>
+                    <p>Please log in to view this transaction.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!transaction) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center text-gray-600">
+                    <p>Transaction not found.</p>
+                </div>
+            </div>
+        );
+    }
+
+    const isBuyer = user.id === transaction.buyer.id;
+    const isSeller = user.id === transaction.seller.id;
 
     return (
         <TransactionView
-            transaction={activeTransaction}
+            transaction={transaction}
             milestones={milestones}
             isBuyer={isBuyer}
             isSeller={isSeller}

@@ -148,3 +148,80 @@ export const categoriesAPI = {
       method: 'GET',
     }),
 };
+
+// Transactions API
+export interface TransactionMilestone {
+  id: number;
+  title: string;
+  description?: string;
+  value: string;
+  status: 'PENDING' | 'AWAITING_REVIEW' | 'COMPLETED' | 'REVISION_REQUESTED' | 'DISPUTED';
+  submission_details?: string;
+}
+
+export interface Transaction {
+  id: number;
+  title: string;
+  description?: string;
+  total_value: string;
+  buyer: User;
+  seller: User;
+  status: 'PENDING_FUNDING' | 'IN_ESCROW' | 'COMPLETED' | 'DISPUTED' | 'CLOSED';
+  created_at: string;
+  milestones: TransactionMilestone[];
+}
+
+export const transactionAPI = {
+  getAll: () =>
+    fetchAPI<{ count: number; results: Transaction[] }>('/api/transactions/', {
+      method: 'GET',
+    }),
+
+  getById: (id: string | number) =>
+    fetchAPI<Transaction>(`/api/transactions/${id}/`, {
+      method: 'GET',
+    }),
+
+  fund: (id: string | number) =>
+    fetchAPI<Transaction>(`/api/transactions/${id}/fund/`, {
+      method: 'POST',
+    }),
+};
+
+// Milestones API
+export const milestoneAPI = {
+  approve: (id: number) =>
+    fetchAPI<TransactionMilestone>(`/api/milestones/${id}/approve/`, {
+      method: 'POST',
+    }),
+
+  submitWork: (id: number, submission_details: string) =>
+    fetchAPI<TransactionMilestone>(`/api/milestones/${id}/submit/`, {
+      method: 'POST',
+      body: JSON.stringify({ submission_details }),
+    }),
+
+  requestRevision: (id: number) =>
+    fetchAPI<TransactionMilestone>(`/api/milestones/${id}/request_revision/`, {
+      method: 'POST',
+    }),
+};
+
+// Search API
+export interface SellerSearchResult {
+  public_seller_id: string;
+  username: string;
+  account_type: 'INDIVIDUAL' | 'COMPANY';
+  company_name?: string;
+  verification_status: 'VERIFIED';
+  skills: ServiceCategory[];
+}
+
+export const searchAPI = {
+  searchSellers: (skill?: string) => {
+    const params = skill ? `?skill=${encodeURIComponent(skill)}` : '';
+    return fetchAPI<SellerSearchResult[]>(`/api/sellers/search/${params}`, {
+      method: 'GET',
+    });
+  },
+};
